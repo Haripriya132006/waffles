@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const BASE_URL = process.env.REACT_APP_BASE_URL;
+const BASE_URL = "https://chatapp-yc2g.onrender.com";
 
 function Login({ setUsername, goToSignup }) {
   const [name, setName] = useState("");
