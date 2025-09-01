@@ -2,7 +2,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 
-const BASE_URL = "https://chatapp-yc2g.onrender.com";
+const BASE_URL = process.env.REACT_APP_BASE_URL;
+const WSS_URL=process.env.REACT_APP_WSS_URL;
 
 function ChatWindow({ currentUser, chatPartner, goBack }) {
   const [messages, setMessages] = useState([]);
@@ -28,7 +29,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
 
   // Create WebSocket once per currentUser
   useEffect(() => {
-    ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
+    ws.current = new WebSocket(`${WSS_URL}/wss/${currentUser}`);
 
     ws.current.onmessage = event => {
       const raw = JSON.parse(event.data);

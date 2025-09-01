@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const BASE_URL = "https://chatapp-yc2g.onrender.com";
+const BASE_URL = process.env.REACT_APP_BASE_URL;
 
 function RequestPanel({ currentUser, setChatPartner, setUserName }) {
   const [allowedUsers, setAllowedUsers] = useState([]);
