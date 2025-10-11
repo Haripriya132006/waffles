@@ -296,3 +296,32 @@ def get_allowed_users(username: str):
             other_user = r["to_user"] if r["from_user"] == username else r["from_user"]
             results.append({"user": other_user, "status": r["status"]})
         return results
+
+@app.get("/encrypted-history/{user1}/{user2}")
+def get_encrypted_history(user1: str, user2: str):
+    """
+    Returns chat history between two users,
+    but message text is bcrypt-encrypted before sending.
+    """
+    for db in get_session():
+        messages = list(db["messages"].find({
+            "$or": [
+                {"from_user": user1, "to_user": user2},
+                {"from_user": user2, "to_user": user1}
+            ]
+        }).sort("timestamp"))
+
+        encrypted_messages = []
+        for msg in messages:
+            msg["_id"] = str(msg["_id"])  # make ObjectId JSON serializable
+            encrypted_text = bcrypt.hashpw(msg["text"].encode(), bcrypt.gensalt()).decode()
+
+            encrypted_messages.append({
+                "_id": msg["_id"],
+                "from_user": msg["from_user"],
+                "to_user": msg["to_user"],
+                "text": encrypted_text,
+                "timestamp": msg["timestamp"]
+            })
+
+        return encrypted_messages
