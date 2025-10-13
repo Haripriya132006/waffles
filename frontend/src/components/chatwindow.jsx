@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-// NOTE: axios and WebSocket logic is commented out/mocked for environment compatibility.
-// The variable names and functional structure are preserved as requested.
+import axios from "axios";
 
 const BASE_URL = "https://chatapp-yc2g.onrender.com";
 
@@ -43,28 +42,57 @@ const NewSendArrow = (props) => (
 // --- ChatWindow Component (Styled with Glassmorphism) ---
 
 function ChatWindow({ currentUser, chatPartner, goBack }) {
-  const [messages, setMessages] = useState([
-    { from: 'Alice', text: 'Hey Bob, are we good to go for the testing session tomorrow? I have a really long text that needs to wrap around the chat bubble multiple times to test the responsive height and line break handling in this cool new glassy UI! This message should demonstrate proper wrapping.', timestamp: new Date(Date.now() - 120000).toISOString() },
-    { from: 'Bob', text: 'Yep, setting up the new API endpoints now. Should be seamless. Ready when you are.', timestamp: new Date(Date.now() - 60000).toISOString() },
-    { from: 'Alice', text: 'Perfect!', timestamp: new Date().toISOString() },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const ws = useRef(null);
   const bottomRef = useRef();
 
-  // --- START ORIGINAL LOGIC (MOCKED) ---
-
+  // Fetch message history when chatPartner changes
   useEffect(() => {
-    // MOCK: Commenting out network logic for stability
+    axios.get(`${BASE_URL}/history/${currentUser}/${chatPartner}`)
+      .then(res => {
+        const normalized = res.data.map(msg => ({
+          ...msg,
+          from: msg.from || msg.from_user,
+          to: msg.to || msg.to_user,
+        }));
+        const sorted = normalized.sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+        setMessages(sorted);
+      })
+      .catch(err => console.error("Error fetching history:", err));
   }, [chatPartner, currentUser]);
 
+  // Create WebSocket once per currentUser
   useEffect(() => {
-    // MOCK: Commenting out WebSocket logic
+    ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
+
+    ws.current.onmessage = event => {
+      const raw = JSON.parse(event.data);
+      const message = {
+        from: raw.from || raw.from_user,
+        to: raw.to || raw.to_user,
+        text: raw.text,
+        timestamp: raw.timestamp,
+        _id: raw._id,
+      };
+
+      // Only add message if it involves current chatPartner
+      if ([message.from, message.to].includes(chatPartner)) {
+        setMessages(prev => [...prev, message]);
+      }
+    };
+
+    ws.current.onclose = () => console.log("WebSocket closed");
+    ws.current.onerror = err => console.error("WebSocket error:", err);
+
     return () => {
       ws.current?.close();
     };
   }, [currentUser, chatPartner]);
 
+  // Scroll to bottom on new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -76,16 +104,11 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
       from: currentUser,
       to: chatPartner,
       text: text.trim(),
-      timestamp: new Date().toISOString(), // Mock timestamp
-      _id: Date.now(), // Mock ID
     };
 
-    // MOCK: Simulate adding message to state instead of sending via WS
-    setMessages(prev => [...prev, messageData]);
+    ws.current.send(JSON.stringify(messageData));
     setText("");
   };
-  // --- END ORIGINAL LOGIC (MOCKED) ---
-
 
   const MessageBubble = ({ msg, alignRight }) => {
     const timeString = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -193,57 +216,4 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     );
 }
 
-// --- Parent Wrapper to Make Component Runnable ---
-
-export default function App() {
-    const [chatPartner, setChatPartner] = useState("Bob");
-    const [isChatting, setIsChatting] = useState(true);
-    const currentUser = "Alice";
-
-    const ChatListMock = ({ setChatPartner, setIsChatting }) => {
-        const mockChats = [
-            { name: "Bob", lastMessage: "Hey, are you free for a call later today? I have a really long message here to test truncation..." },
-            { name: "Charlie", lastMessage: "Finished the report, sending it now." },
-            { name: "Dave", lastMessage: "Need help with the component styling?" },
-        ];
-        return (
-            <div className="p-6">
-                <h3 className="text-2xl font-bold mb-6 text-gray-800">Chats</h3>
-                {mockChats.map(chat => (
-                    <div 
-                        key={chat.name} 
-                        onClick={() => { setChatPartner(chat.name); setIsChatting(true); }} 
-                        className="p-3 mb-2 rounded-xl cursor-pointer bg-white/60 hover:bg-purple-100/80 transition-colors duration-200"
-                        style={{ boxShadow: '0 2px 5px rgba(0, 0, 0, 0.05)' }}
-                    >
-                        <div className="font-semibold text-lg text-gray-800">{chat.name}</div>
-                        <div className="text-sm text-gray-600 truncate">{chat.lastMessage}</div>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
-    return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-200 to-indigo-200 font-inter p-4 sm:p-8">
-            <div 
-                className="relative w-full max-w-4xl flex flex-col h-[90vh] rounded-[3rem] overflow-hidden bg-white/30 backdrop-blur-2xl md:flex-row"
-                style={{ boxShadow: '0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.4)' }}
-            >
-                {/* Left Panel: Chat List (Simulated) */}
-                <div className="w-full md:w-1/3 border-r border-indigo-200/50 flex-none" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    <ChatListMock setChatPartner={setChatPartner} setIsChatting={setIsChatting} />
-                </div>
-
-                {/* Right Panel: Chat Window */}
-                <div className="flex-1 min-h-0">
-                    <ChatWindow 
-                        currentUser={currentUser} 
-                        chatPartner={chatPartner} 
-                        goBack={() => setIsChatting(false)} 
-                    />
-                </div>
-            </div>
-        </div>
-    );
-}
+export default ChatWindow;
