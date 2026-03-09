@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import "./Auth.css";
 
 const BASE_URL = "https://chatapp-yc2g.onrender.com";
 
@@ -19,7 +20,6 @@ function Login({ setUsername, goToSignup }) {
       setError("Both fields are required.");
       return;
     }
-
     try {
       await axios.post(`${BASE_URL}/login`, {
         username: name.trim(),
@@ -33,11 +33,7 @@ function Login({ setUsername, goToSignup }) {
   };
 
   const fetchSecurityQuestion = async () => {
-    if (!name.trim()) {
-      setError("Enter your username first.");
-      return;
-    }
-
+    if (!name.trim()) { setError("Enter your username first."); return; }
     try {
       const res = await axios.get(`${BASE_URL}/recovery-question/${name.trim()}`);
       setQuestion(res.data.question);
@@ -53,7 +49,7 @@ function Login({ setUsername, goToSignup }) {
       await axios.post(`${BASE_URL}/reset-password`, {
         username: name.trim(),
         answer: answer.trim(),
-        new_password: "TEMP", // test value, actual update later
+        new_password: "TEMP",
       });
       setIsAnswerVerified(true);
       setError("");
@@ -80,71 +76,130 @@ function Login({ setUsername, goToSignup }) {
     }
   };
 
+  /* ── Recovery flow ── */
+  if (showRecovery) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <div className="auth-brand__icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                  fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <span className="auth-brand__name">Helio</span>
+          </div>
+
+          <h1 className="auth-title">Reset password</h1>
+          <p className="auth-subtitle">Answer your security question to continue</p>
+
+          <div className="auth-form">
+            <div className="auth-security-box">
+              <strong>Security question</strong>
+              <span>{question}</span>
+            </div>
+
+            {!isAnswerVerified ? (
+              <>
+                <div className="auth-field">
+                  <label className="auth-label">Your answer</label>
+                  <input
+                    className="auth-input"
+                    type="text"
+                    placeholder="Enter your answer"
+                    value={answer}
+                    onChange={(e) => { setAnswer(e.target.value); setError(""); }}
+                  />
+                </div>
+                {error && <p className="auth-error">{error}</p>}
+                <div className="auth-actions">
+                  <button className="auth-btn" onClick={verifyAnswer}>Verify answer</button>
+                  <button className="auth-btn auth-btn--ghost" onClick={() => setShowRecovery(false)}>Back to login</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="auth-field">
+                  <label className="auth-label">New password</label>
+                  <input
+                    className="auth-input"
+                    type="password"
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setError(""); }}
+                  />
+                </div>
+                {error && <p className="auth-error">{error}</p>}
+                <div className="auth-actions">
+                  <button className="auth-btn" onClick={handleResetPassword}>Reset password</button>
+                  <button className="auth-btn auth-btn--ghost" onClick={() => setShowRecovery(false)}>Back to login</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Login flow ── */
   return (
-    <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h2>{showRecovery ? "Reset Password" : "Login"}</h2>
+    <div className="auth-shell">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="auth-brand__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <span className="auth-brand__name">Helio</span>
+        </div>
 
-      <input
-        type="text"
-        placeholder="Username"
-        value={name}
-        onChange={(e) => {
-          setName(e.target.value);
-          setError("");
-        }}
-        style={{ marginBottom: "10px" }}
-      /><br />
+        <h1 className="auth-title">Welcome back</h1>
+        <p className="auth-subtitle">Sign in to continue</p>
 
-      {!showRecovery ? (
-        <>
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError("");
-            }}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            style={{ marginBottom: "10px" }}
-          /><br />
-          <button onClick={handleLogin}>Login</button>
-          <button onClick={fetchSecurityQuestion}>Forgot Password</button>
-          <button onClick={goToSignup}>Create an Account</button>
-        </>
-      ) : (
-        <>
-          <p><strong>Security Question:</strong> {question}</p>
+        <div className="auth-form">
+          <div className="auth-field">
+            <label className="auth-label">Username</label>
+            <input
+              className="auth-input"
+              type="text"
+              placeholder="your_username"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(""); }}
+              autoComplete="username"
+            />
+          </div>
 
-          {!isAnswerVerified ? (
-            <>
-              <input
-                type="text"
-                placeholder="Your answer"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                style={{ marginBottom: "10px" }}
-              /><br />
-              <button onClick={verifyAnswer}>Verify Answer</button>
-              <button onClick={() => setShowRecovery(false)}>Back to Login</button>
-            </>
-          ) : (
-            <>
-              <input
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{ marginBottom: "10px" }}
-              /><br />
-              <button onClick={handleResetPassword}>Reset Password</button>
-              <button onClick={() => setShowRecovery(false)}>Back to Login</button>
-            </>
-          )}
-        </>
-      )}
+          <div className="auth-field">
+            <label className="auth-label">Password</label>
+            <input
+              className="auth-input"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              autoComplete="current-password"
+            />
+          </div>
 
-      {error && <div style={{ color: "red", marginTop: "10px" }}>{error}</div>}
+          {error && <p className="auth-error">{error}</p>}
+
+          <div className="auth-actions">
+            <button className="auth-btn" onClick={handleLogin}>Sign in</button>
+            <div className="auth-divider" />
+            <button className="auth-btn auth-btn--ghost" onClick={fetchSecurityQuestion}>Forgot password</button>
+          </div>
+        </div>
+
+        <p className="auth-switch">
+          No account?{" "}
+          <button className="auth-link" onClick={goToSignup}>Create one</button>
+        </p>
+      </div>
     </div>
   );
 }
