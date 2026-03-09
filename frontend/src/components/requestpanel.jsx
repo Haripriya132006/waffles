@@ -28,6 +28,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
   const [newUser, setNewUser] = useState("");
   const [activeTab, setActiveTab] = useState("chats");
   const [feedback, setFeedback] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchAllowedUsers();
@@ -77,6 +78,11 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
     fetchAllowedUsers();
   };
 
+  const switchTab = (key) => {
+    setActiveTab(key);
+    setSidebarOpen(false); // close sidebar after selecting on mobile
+  };
+
   const tabs = [
     { key: "chats",    label: "Chats",    count: allowedUsers.length },
     { key: "requests", label: "Requests", count: pendingRequests.length },
@@ -85,17 +91,24 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
 
   return (
     <div className="rp-shell">
+
+      {/* Mobile overlay — tap to close sidebar */}
+      {sidebarOpen && (
+        <div className="rp-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="rp-sidebar">
+      <aside className={`rp-sidebar ${sidebarOpen ? "rp-sidebar--open" : ""}`}>
         <div className="rp-sidebar__top">
-          <div className="rp-brand">
+          {/* Logo — clicking closes sidebar on mobile */}
+          <div className="rp-brand" onClick={() => setSidebarOpen(false)}>
             <div className="rp-brand__icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
                   fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
             </div>
-            <span className="rp-brand__name">Waffles</span>
+            <span className="rp-brand__name">Helio</span>
           </div>
 
           <nav className="rp-nav">
@@ -103,7 +116,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
               <button
                 key={key}
                 className={`rp-nav__item ${activeTab === key ? "active" : ""}`}
-                onClick={() => setActiveTab(key)}
+                onClick={() => switchTab(key)}
               >
                 <span className="rp-nav__label">{label}</span>
                 {count > 0 && <span className="rp-badge">{count}</span>}
@@ -133,6 +146,33 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
 
       {/* Main */}
       <main className="rp-main">
+
+        {/* Mobile top bar — visible only on small screens */}
+        <div className="rp-topbar">
+          <button className="rp-topbar__menu" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+            <div className="rp-brand__icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                  fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <span className="rp-brand__name">Helio</span>
+          </button>
+
+          {/* Mobile tab pills */}
+          <div className="rp-topbar__tabs">
+            {tabs.map(({ key, label, count }) => (
+              <button
+                key={key}
+                className={`rp-pill ${activeTab === key ? "active" : ""}`}
+                onClick={() => setActiveTab(key)}
+              >
+                {label}
+                {count > 0 && <span className="rp-pill__badge">{count}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* ── Chats tab ── */}
         {activeTab === "chats" && (
@@ -222,7 +262,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
                 onKeyDown={(e) => e.key === "Enter" && sendRequest()}
               />
               <button className="rp-btn rp-btn--primary rp-btn--send" onClick={sendRequest}>
-                Send request
+                Send
               </button>
             </div>
             {feedback && <div className="rp-feedback">{feedback}</div>}

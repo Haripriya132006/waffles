@@ -3,15 +3,27 @@
 .rp-shell {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   background: var(--bg-base);
   overflow: hidden;
   animation: rp-fade 0.22s ease both;
+  position: relative;
 }
 
 @keyframes rp-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* ── Overlay (mobile) ── */
+.rp-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+  backdrop-filter: blur(2px);
 }
 
 /* ── Sidebar ── */
@@ -24,7 +36,8 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 20px 10px;
-  transition: background var(--transition), border-color var(--transition);
+  transition: background var(--transition), border-color var(--transition), transform 0.25s cubic-bezier(0.16,1,0.3,1);
+  z-index: 50;
 }
 
 .rp-sidebar__top { display: flex; flex-direction: column; gap: 24px; }
@@ -34,6 +47,8 @@
   align-items: center;
   gap: 9px;
   padding: 0 8px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .rp-brand__icon {
@@ -41,11 +56,11 @@
   background: var(--accent-dim);
   border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
 
 .rp-brand__name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 15px; font-weight: 600;
   letter-spacing: -0.3px;
   color: var(--text-primary);
 }
@@ -58,30 +73,23 @@
   justify-content: space-between;
   padding: 9px 10px;
   border-radius: var(--radius-md);
-  background: none;
-  border: none;
+  background: none; border: none;
   color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 14px; font-weight: 500;
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
   font-family: var(--font-sans);
-  width: 100%;
-  text-align: left;
+  width: 100%; text-align: left;
 }
-
-.rp-nav__item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.rp-nav__item:hover  { background: var(--bg-hover); color: var(--text-primary); }
 .rp-nav__item.active { background: var(--accent-dim); color: var(--accent); }
 
 .rp-badge {
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
+  background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 600;
   padding: 1px 6px;
   border-radius: var(--radius-full);
-  min-width: 18px;
-  text-align: center;
+  min-width: 18px; text-align: center;
 }
 
 .rp-sidebar__bottom {
@@ -94,8 +102,7 @@
 
 .rp-user { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .rp-user__name {
-  font-size: 13px; font-weight: 500;
-  color: var(--text-primary);
+  font-size: 13px; font-weight: 500; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -103,10 +110,10 @@
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 6px;
-  cursor: pointer;
+  padding: 6px; cursor: pointer;
   color: var(--text-muted);
   display: flex; align-items: center; justify-content: center;
+  min-width: 32px; min-height: 32px;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
 .rp-logout:hover {
@@ -119,21 +126,81 @@
 .rp-main {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg-base);
   transition: background var(--transition);
+  display: flex;
+  flex-direction: column;
 }
 
+/* ── Mobile topbar (hidden on desktop) ── */
+.rp-topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.rp-topbar__menu {
+  display: flex; align-items: center; gap: 9px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-sans);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.rp-topbar__tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rp-topbar__tabs::-webkit-scrollbar { display: none; }
+
+/* Tab pills (mobile only) */
+.rp-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 13px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  font-family: var(--font-sans);
+  transition: background var(--transition), color var(--transition);
+}
+.rp-pill.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(91,124,255,0.25);
+}
+.rp-pill__badge {
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  min-width: 16px; text-align: center;
+}
+
+/* ── Content ── */
 .rp-section {
   max-width: 580px;
+  width: 100%;
   margin: 0 auto;
-  padding: 36px 28px;
+  padding: 28px 20px;
+  flex: 1;
 }
 
 .rp-section__title {
   font-size: 19px; font-weight: 600;
   letter-spacing: -0.4px;
   color: var(--text-primary);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .rp-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
@@ -170,6 +237,7 @@
   transition: background var(--transition), color var(--transition);
   font-family: var(--font-sans);
   white-space: nowrap;
+  min-height: 34px; /* tap-friendly */
 }
 
 .rp-btn--primary  { background: var(--accent-dim); color: var(--accent); border-color: rgba(91,124,255,0.2); }
@@ -195,15 +263,17 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 10px 13px;
-  font-size: 14px; color: var(--text-primary);
+  font-size: 16px; /* prevent iOS zoom */
+  color: var(--text-primary);
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition);
   font-family: var(--font-sans);
+  -webkit-appearance: none;
 }
 .rp-input::placeholder { color: var(--text-muted); }
 .rp-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-dim); }
 
-.rp-btn--send { padding: 10px 18px; font-size: 14px; border-radius: var(--radius-md); height: 42px; }
+.rp-btn--send { padding: 10px 18px; font-size: 14px; border-radius: var(--radius-md); height: 44px; }
 
 .rp-feedback {
   font-size: 13px; color: var(--online);
@@ -217,3 +287,33 @@
 .rp-empty__icon { font-size: 34px; margin-bottom: 10px; }
 .rp-empty p    { font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
 .rp-empty span { font-size: 13px; }
+
+/* ══════════════════════════════
+   MOBILE  (≤ 640px)
+══════════════════════════════ */
+@media (max-width: 640px) {
+  /* Show overlay when sidebar open */
+  .rp-overlay { display: block; }
+
+  /* Sidebar slides in from left */
+  .rp-sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 100dvh;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .rp-sidebar--open {
+    transform: translateX(0);
+  }
+
+  /* Show mobile topbar, hide sidebar on default */
+  .rp-topbar { display: flex; }
+
+  /* Give content a bit less padding */
+  .rp-section { padding: 20px 14px; }
+
+  /* Stack item actions on very small screens */
+  .rp-item { flex-wrap: wrap; }
+  .rp-item__actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
+}

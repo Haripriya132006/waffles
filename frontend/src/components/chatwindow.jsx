@@ -24,7 +24,11 @@ function Avatar({ name, size = 32 }) {
 
 function formatTime(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 function ChatWindow({ currentUser, chatPartner, goBack }) {
