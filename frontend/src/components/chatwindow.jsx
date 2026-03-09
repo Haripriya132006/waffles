@@ -161,32 +161,42 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
             aria-label="Send"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-              <polygon 
-                points="22 3 2 10 10 13 13 22 22 3" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinejoin="round" 
+              <path
+                d="
+                  M21 4
+                  Q20.5 3 19 3.4
+                  Q11.5 5.5 4.5 8
+                  Q3.2 8.7 4.4 9.9
+                  Q7.8 11.3 12 12
+                  Q13.3 16 14.2 19.6
+                  Q14.7 21 16.1 20
+                  Q18.6 13.6 21 4
+                  Z
+                "
+                stroke="currentColor"
+                strokeWidth="2"
                 strokeLinecap="round"
+                strokeLinejoin="round"
                 fill="none"
               />
-              
-              <line 
-                x1="10" 
-                y1="13" 
-                x2="16" 
-                y2="8" 
-                stroke="currentColor" 
-                strokeWidth="2" 
+
+              <line
+                x1="12"
+                y1="12"
+                x2="17"
+                y2="7"
+                stroke="currentColor"
+                strokeWidth="2"
                 strokeLinecap="round"
               />
 
-              <line 
-                x1="10" 
-                y1="13" 
-                x2="13" 
-                y2="22" 
-                stroke="currentColor" 
-                strokeWidth="2" 
+              <line
+                x1="12"
+                y1="12"
+                x2="14"
+                y2="19.5"
+                stroke="currentColor"
+                strokeWidth="2"
                 strokeLinecap="round"
               />
               {/* <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
