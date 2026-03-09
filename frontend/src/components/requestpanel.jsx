@@ -12,7 +12,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
   useEffect(() => {
     fetchAllowedUsers();
     fetchPendingRequests();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAllowedUsers = async () => {
     const res = await axios.get(`${BASE_URL}/allowed-users/${currentUser}`);
@@ -100,7 +100,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
         {pendingRequests.length === 0 ? (
           <p>No pending requests</p>
         ) : (
-          pendingRequests.map((req,index) => (
+          pendingRequests.map((req, index) => (
             <div key={index} style={{ marginBottom: "10px" }}>
               {req.from_user}
               <button
