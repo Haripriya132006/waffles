@@ -88,7 +88,7 @@ function Login({ setUsername, goToSignup }) {
                   fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
             </div>
-            <span className="auth-brand__name">Helio</span>
+            <span className="auth-brand__name">Waffles</span>
           </div>
 
           <h1 className="auth-title">Reset password</h1>
@@ -154,7 +154,7 @@ function Login({ setUsername, goToSignup }) {
                 fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
             </svg>
           </div>
-          <span className="auth-brand__name">Helio</span>
+          <span className="auth-brand__name">Waffles</span>
         </div>
 
         <h1 className="auth-title">Welcome back</h1>

@@ -39,7 +39,7 @@ function Signin({ goToLogin }) {
                 fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
             </svg>
           </div>
-          <span className="auth-brand__name">Helio</span>
+          <span className="auth-brand__name">Waffles</span>
         </div>
 
         <h1 className="auth-title">Create account</h1>

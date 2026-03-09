@@ -95,7 +95,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
                   fill="var(--accent)" opacity="0.2" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round"/>
               </svg>
             </div>
-            <span className="rp-brand__name">Helio</span>
+            <span className="rp-brand__name">Waffles</span>
           </div>
 
           <nav className="rp-nav">
