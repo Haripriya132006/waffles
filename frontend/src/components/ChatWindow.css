@@ -116,6 +116,7 @@
   word-break: break-word;
   border-radius: var(--radius-md);
   transition: background var(--transition);
+  white-space: pre-wrap;
 }
 
 .cw-bubble--other {
