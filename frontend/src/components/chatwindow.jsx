@@ -230,7 +230,12 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
             rows={1}
             placeholder={`Message ${chatPartner}…`}
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={e => {
+                setText(e.target.value); 
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+              }
+            }
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
           />
           <button

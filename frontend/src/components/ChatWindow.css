@@ -171,6 +171,7 @@
   line-height: 1.5;
   color: var(--text-primary);
   max-height: 120px;
+  min-height: 38px;
   overflow-y: auto;
   font-family: var(--font-sans);
   -webkit-appearance: none;
