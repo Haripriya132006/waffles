@@ -163,7 +163,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
             disabled={!text.trim()}
             aria-label="Send"
           >
-            <img src={SendIcon} alt="Send" width="20" height="20"/>
+            <img src={SendIcon} alt="Send" width="20" height="20" style={{ filter: "brightness(0) saturate(100%) invert(87%) sepia(20%) saturate(400%) hue-rotate(233deg) brightness(103%)" }}/>
             {/* <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
               <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="none"/>
