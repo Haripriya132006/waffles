@@ -343,8 +343,8 @@
 }
 
 /* Right side for received, left side for sent */
-.cw-row--other .cw-reply-btn { right: 8px; }
-.cw-row--self  .cw-reply-btn { left: 8px; }
+.cw-row--other .cw-reply-btn { right: 2px; }
+.cw-row--self  .cw-reply-btn { left: 2px; }
 
 /* Show on hover — desktop only */
 @media (hover: hover) {
