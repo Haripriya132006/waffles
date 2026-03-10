@@ -14,12 +14,18 @@ class User(BaseModel):
     security_question: str
     security_answer: str
 
+class ReplyTo(BaseModel):
+    message_id: str
+    from_user: str
+    text: str  # preview of the original message
+
 class Message(BaseModel):
     from_user: str
     to_user: str
     text: str
     delivered: bool = False
     timestamp: datetime = Field(default_factory=ist_now)
+    reply_to: Optional[ReplyTo] = None  # None if not a reply
 
 class ChatRequest(BaseModel):
     from_user: str

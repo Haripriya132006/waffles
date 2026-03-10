@@ -4,8 +4,11 @@ from db import get_session
 from models import User, Message, ChatRequest
 from typing import Dict
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import bcrypt
+from bson import ObjectId
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 app = FastAPI()
 
@@ -17,24 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Active WebSocket connections (username -> WebSocket object)
 active_connections: Dict[str, WebSocket] = {}
-
 
 def hash(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-
 def verify_value(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-
-
-from fastapi import WebSocket, WebSocketDisconnect
-from datetime import datetime
-from bson import ObjectId
-from db import get_session
-
-# Active WebSocket connections (username -> WebSocket object)
-active_connections = {}
 
 @app.websocket("/wss/{username}")
 async def chat_ws(websocket: WebSocket, username: str):
@@ -62,6 +55,7 @@ async def chat_ws(websocket: WebSocket, username: str):
 
             to_user = data.get("to")
             text = data.get("text")
+            reply_to = data.get("reply_to")  # { message_id, from_user, text }
 
             if not to_user or not text:
                 print("⚠️ Invalid WS payload (missing 'to' or 'text'), skipping")
@@ -71,8 +65,9 @@ async def chat_ws(websocket: WebSocket, username: str):
                 "from_user": username,
                 "to_user": to_user,
                 "text": text,
-                "timestamp": datetime.utcnow().isoformat(),
-                "delivered": False
+                "timestamp": datetime.now(IST).isoformat(),
+                "delivered": False,
+                "reply_to": reply_to or None,
             }
 
             # Save message to DB
@@ -136,10 +131,6 @@ def request_chat(data: ChatRequestBody):
     for db in get_session():
         db["chatrequests"].insert_one(request)
     return {"msg": "Request sent"}
-
-
-from bson import ObjectId  # At the top if not already
-
 
 
 @app.get("/pending-requests/{username}")

@@ -1,5 +1,5 @@
 // src/components/ChatWindow.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import "./ChatWindow.css";
 import SendIcon from '../assets/send-icon.svg';
@@ -23,17 +23,6 @@ function Avatar({ name, size = 32 }) {
   );
 }
 
-// function formatTime(ts) {
-//   if (!ts) return "";
-//   // If server sends timestamps without timezone info, they're UTC — append Z to force correct parsing
-//   const normalized = typeof ts === "string" && !ts.endsWith("Z") && !ts.includes("+") ? ts + "Z" : ts;
-//   return new Date(normalized).toLocaleTimeString("en-IN", {
-//     hour: "2-digit",
-//     minute: "2-digit",
-//     timeZone: "Asia/Kolkata",
-//   });
-// }
-
 function formatTime(ts) {
   if (!ts) return "";
   return new Date(ts).toLocaleTimeString("en-IN", {
@@ -43,12 +32,19 @@ function formatTime(ts) {
   });
 }
 
+function truncate(text, max = 60) {
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) + "…" : text;
+}
+
 function ChatWindow({ currentUser, chatPartner, goBack }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState(null); // { message_id, from_user, text }
   const ws = useRef(null);
   const bottomRef = useRef();
   const inputRef = useRef();
+  const lastTap = useRef({ id: null, time: 0 }); // double-tap tracking
 
   useEffect(() => {
     axios.get(`${BASE_URL}/history/${currentUser}/${chatPartner}`)
@@ -60,7 +56,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         }));
         setMessages(normalized.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
       });
-  }, [chatPartner, currentUser]);
+  }, [chatPartner, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
@@ -72,6 +68,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         text: raw.text,
         timestamp: raw.timestamp,
         _id: raw._id,
+        reply_to: raw.reply_to || null,
       };
       if ([message.from, message.to].includes(chatPartner)) {
         setMessages(prev => [...prev, message]);
@@ -80,20 +77,47 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     ws.current.onclose = () => console.log("WebSocket closed");
     ws.current.onerror = err => console.error("WebSocket error:", err);
     return () => ws.current?.close();
-  }, [currentUser, chatPartner]);
+  }, [currentUser, chatPartner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (replyTo) inputRef.current?.focus();
+  }, [replyTo]);
+
   const sendMessage = () => {
     if (!text.trim()) return;
-    ws.current.send(JSON.stringify({ from: currentUser, to: chatPartner, text: text.trim() }));
+    ws.current.send(JSON.stringify({
+      from: currentUser,
+      to: chatPartner,
+      text: text.trim(),
+      reply_to: replyTo || undefined,
+    }));
     setText("");
+    setReplyTo(null);
     inputRef.current?.focus();
   };
 
-  // Group consecutive messages by sender
+  // Desktop: double-click
+  const handleDoubleClick = useCallback((msg) => {
+    setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text });
+  }, []);
+
+  // Mobile: double-tap (within 350ms)
+  const handleTouchEnd = useCallback((msg) => {
+    const now = Date.now();
+    if (lastTap.current.id === msg._id && now - lastTap.current.time < 350) {
+      setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text });
+      lastTap.current = { id: null, time: 0 };
+    } else {
+      lastTap.current = { id: msg._id, time: now };
+    }
+  }, []);
+
+  const cancelReply = () => setReplyTo(null);
+
   const grouped = messages.map((msg, i) => ({
     ...msg,
     isSelf: msg.from === currentUser,
@@ -130,7 +154,12 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         )}
 
         {grouped.map((msg, i) => (
-          <div key={msg._id || i} className={`cw-row ${msg.isSelf ? "cw-row--self" : "cw-row--other"}`}>
+          <div
+            key={msg._id || i}
+            className={`cw-row ${msg.isSelf ? "cw-row--self" : "cw-row--other"}`}
+            onDoubleClick={() => handleDoubleClick(msg)}
+            onTouchEnd={() => handleTouchEnd(msg)}
+          >
             {!msg.isSelf && (
               msg.isFirst
                 ? <div className="cw-row__avatar"><Avatar name={msg.from} size={26} /></div>
@@ -142,7 +171,15 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 msg.isSelf ? "cw-bubble--self" : "cw-bubble--other",
                 msg.isFirst ? "is-first" : "",
                 msg.isLast  ? "is-last"  : "",
+                msg.reply_to ? "has-reply" : "",
               ].join(" ")}>
+                {/* Reply quote inside bubble */}
+                {msg.reply_to && (
+                  <div className="cw-quote">
+                    <span className="cw-quote__name">{msg.reply_to.from_user}</span>
+                    <span className="cw-quote__text">{truncate(msg.reply_to.text)}</span>
+                  </div>
+                )}
                 {msg.text}
               </div>
               {msg.isLast && (
@@ -153,6 +190,23 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         ))}
         <div ref={bottomRef} />
       </div>
+
+      {/* Reply banner above input */}
+      {replyTo && (
+        <div className="cw-reply-banner">
+          <div className="cw-reply-banner__bar" />
+          <div className="cw-reply-banner__body">
+            <span className="cw-reply-banner__name">Replying to <strong>{replyTo.from_user}</strong></span>
+            <span className="cw-reply-banner__text">{truncate(replyTo.text)}</span>
+          </div>
+          <button className="cw-reply-banner__close" onClick={cancelReply} aria-label="Cancel reply">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Input */}
       <div className="cw-input-area">
@@ -172,14 +226,16 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
             disabled={!text.trim()}
             aria-label="Send"
           >
-            <img src={SendIcon} alt="Send" width="20" height="20" style={{ filter: "brightness(0) saturate(100%) invert(87%) sepia(20%) saturate(400%) hue-rotate(233deg) brightness(103%)" }}/>
-            {/* <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-              <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="none"/>
-            </svg> */}
+            <img
+              src={SendIcon}
+              alt="Send"
+              width="20"
+              height="20"
+              style={{ filter: "brightness(0) saturate(100%) invert(87%) sepia(20%) saturate(400%) hue-rotate(233deg) brightness(103%)" }}
+            />
           </button>
         </div>
-        <p className="cw-hint">Enter to send · Shift+Enter for new line</p>
+        <p className="cw-hint">Enter to send · Shift+Enter for new line · Double-tap to reply</p>
       </div>
     </div>
   );
