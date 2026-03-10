@@ -313,3 +313,43 @@
   color: var(--text, #fff);
   background: rgba(255,255,255,0.08);
 }
+
+.cw-row {
+  position: relative;
+}
+
+.cw-reply-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  background: var(--bg-surface, #1e2027);
+  border: 1px solid var(--border, #2a2d35);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary, #aaa);
+}
+
+.cw-reply-btn:hover {
+  color: var(--accent, #5b7cff);
+  background: var(--bg-hover, #22252e);
+}
+
+/* Right side for received, left side for sent */
+.cw-row--other .cw-reply-btn { right: 8px; }
+.cw-row--self  .cw-reply-btn { left: 8px; }
+
+/* Show on hover — desktop only */
+@media (hover: hover) {
+  .cw-row:hover .cw-reply-btn {
+    opacity: 1;
+    pointer-events: all;
+  }
+}

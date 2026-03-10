@@ -165,6 +165,19 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 ? <div className="cw-row__avatar"><Avatar name={msg.from} size={26} /></div>
                 : <div className="cw-row__avatar-gap" />
             )}
+
+            {/* Reply icon — desktop hover only */}
+            <button
+              className="cw-reply-btn"
+              onClick={() => handleDoubleClick(msg)}
+              aria-label="Reply"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <polyline points="9 17 4 12 9 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M20 18v-2a4 4 0 0 0-4-4H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
             <div className="cw-col">
               <div className={[
                 "cw-bubble",
