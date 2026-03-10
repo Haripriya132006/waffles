@@ -23,11 +23,20 @@ function Avatar({ name, size = 32 }) {
   );
 }
 
+// function formatTime(ts) {
+//   if (!ts) return "";
+//   // If server sends timestamps without timezone info, they're UTC — append Z to force correct parsing
+//   const normalized = typeof ts === "string" && !ts.endsWith("Z") && !ts.includes("+") ? ts + "Z" : ts;
+//   return new Date(normalized).toLocaleTimeString("en-IN", {
+//     hour: "2-digit",
+//     minute: "2-digit",
+//     timeZone: "Asia/Kolkata",
+//   });
+// }
+
 function formatTime(ts) {
   if (!ts) return "";
-  // If server sends timestamps without timezone info, they're UTC — append Z to force correct parsing
-  const normalized = typeof ts === "string" && !ts.endsWith("Z") && !ts.includes("+") ? ts + "Z" : ts;
-  return new Date(normalized).toLocaleTimeString("en-IN", {
+  return new Date(ts).toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Kolkata",
