@@ -345,7 +345,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 onClick={(e) => handleBubbleClick(e, msg)}
               >
                 {msg.isDeletedForMe ? (
-                  <span>🚫 You deleted this message</span>
+                  <span>You deleted this message</span>
                 ) : (
                   <>
                     {msg.reply_to && (
