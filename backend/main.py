@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from db import get_session
 from models import User, Message, ChatRequest
@@ -20,14 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Active WebSocket connections (username -> WebSocket object)
 active_connections: Dict[str, WebSocket] = {}
+
 
 def hash(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+
 def verify_value(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
 
 @app.websocket("/wss/{username}")
 async def chat_ws(websocket: WebSocket, username: str):
@@ -35,30 +37,60 @@ async def chat_ws(websocket: WebSocket, username: str):
     active_connections[username] = websocket
     print(f"✅ WS connected: {username}")
 
-    # Send any undelivered messages for this user
     for db in get_session():
         undelivered = list(db["messages"].find({"to_user": username, "delivered": False}))
         for msg in undelivered:
-            oid = msg["_id"]                # Keep original ObjectId for DB update
-            msg["_id"] = str(oid)           # Convert to string for sending to frontend
+            oid = msg["_id"]
+            msg["_id"] = str(oid)
             await websocket.send_json(msg)
-            db["messages"].update_one(
-                {"_id": oid},
-                {"$set": {"delivered": True}}
-            )
+            db["messages"].update_one({"_id": oid}, {"$set": {"delivered": True}})
 
     try:
         while True:
-            # Wait for a message from the frontend
             data = await websocket.receive_json()
             print(f"📩 Received from {username}: {data}")
 
+            msg_type = data.get("type")
+
+            # ── Edit message ──
+            if msg_type == "edit":
+                msg_id = data.get("_id")
+                new_text = data.get("text")
+                to_user = data.get("to")
+                if not msg_id or not new_text:
+                    continue
+                for db in get_session():
+                    db["messages"].update_one(
+                        {"_id": ObjectId(msg_id), "from_user": username},
+                        {"$set": {"text": new_text, "edited": True, "edited_at": datetime.now(IST).isoformat()}}
+                    )
+                broadcast = {"type": "edit", "_id": msg_id, "text": new_text}
+                # Notify recipient
+                if to_user and to_user in active_connections:
+                    await active_connections[to_user].send_json(broadcast)
+                continue
+
+            # ── Soft delete ──
+            if msg_type == "delete":
+                msg_id = data.get("_id")
+                to_user = data.get("to")
+                if not msg_id:
+                    continue
+                for db in get_session():
+                    db["messages"].update_one(
+                        {"_id": ObjectId(msg_id)},
+                        {"$addToSet": {"deleted_for": username}}
+                    )
+                # No need to broadcast delete to recipient — it's only hidden for sender
+                continue
+
+            # ── Regular message ──
             to_user = data.get("to")
             text = data.get("text")
-            reply_to = data.get("reply_to")  # { message_id, from_user, text }
+            reply_to = data.get("reply_to")
 
             if not to_user or not text:
-                print("⚠️ Invalid WS payload (missing 'to' or 'text'), skipping")
+                print("⚠️ Invalid WS payload, skipping")
                 continue
 
             message = {
@@ -68,15 +100,15 @@ async def chat_ws(websocket: WebSocket, username: str):
                 "timestamp": datetime.now(IST).isoformat(),
                 "delivered": False,
                 "reply_to": reply_to or None,
+                "edited": False,
+                "deleted_for": [],
             }
 
-            # Save message to DB
             for db in get_session():
                 res = db["messages"].insert_one(message)
-                message["_id"] = str(res.inserted_id)   # include _id for frontend
+                message["_id"] = str(res.inserted_id)
                 print(f"✅ Inserted into DB with _id: {res.inserted_id}")
 
-            # Send to recipient in real-time if online
             if to_user in active_connections:
                 await active_connections[to_user].send_json(message)
                 message["delivered"] = True
@@ -86,7 +118,6 @@ async def chat_ws(websocket: WebSocket, username: str):
                         {"$set": {"delivered": True}}
                     )
 
-            # 🔹 Always echo back to sender as confirmation
             if username in active_connections:
                 await active_connections[username].send_json(message)
 
@@ -102,7 +133,7 @@ def root():
 
 
 @app.get("/history/{user1}/{user2}")
-def det_history(user1: str, user2: str):
+def get_history(user1: str, user2: str):
     for db in get_session():
         messages = list(db["messages"].find({
             "$or": [
@@ -110,13 +141,9 @@ def det_history(user1: str, user2: str):
                 {"from_user": user2, "to_user": user1}
             ]
         }).sort("timestamp"))
-
-        # Remove or convert _id from each message
         for msg in messages:
-            msg["_id"] = str(msg["_id"])  # Or: del msg["_id"]
-
+            msg["_id"] = str(msg["_id"])
         return messages
-
 
 
 class ChatRequestBody(BaseModel):
@@ -138,9 +165,11 @@ def get_requests(username: str):
     for db in get_session():
         return list(db["chatrequests"].find({"to_user": username, "status": "pending"}, {"_id": 0}))
 
+
 class AcceptRequestBody(BaseModel):
     from_user: str
     to_user: str
+
 
 @app.post("/accept-chat")
 def accept_chat(data: AcceptRequestBody):
@@ -151,8 +180,7 @@ def accept_chat(data: AcceptRequestBody):
         )
         if result.modified_count:
             return {"msg": "Chat accepted"}
-        else:
-            return {"error": "No such request"}
+        return {"error": "No such request"}
 
 
 class UpdateStatusBody(BaseModel):
@@ -209,7 +237,6 @@ def signup(data: SignupRequest):
         existing = db["users"].find_one({"username": data.username})
         if existing:
             raise HTTPException(status_code=400, detail="Username already exists")
-
         user = {
             "username": data.username,
             "password": hash(data.password),
@@ -241,13 +268,10 @@ def reset_password(data: Recovery):
         user = db["users"].find_one({"username": data.username})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
         if not verify_value(data.answer, user["security_answer"]):
             raise HTTPException(status_code=401, detail="Incorrect answer")
-
         if data.new_password == "TEMP":
             return {"msg": "Answer verified"}
-
         db["users"].update_one(
             {"username": data.username},
             {"$set": {"password": hash(data.new_password)}}
@@ -288,12 +312,9 @@ def get_allowed_users(username: str):
             results.append({"user": other_user, "status": r["status"]})
         return results
 
+
 @app.get("/encrypted-history/{user1}/{user2}")
 def get_encrypted_history(user1: str, user2: str):
-    """
-    Returns chat history between two users,
-    but message text is bcrypt-encrypted before sending.
-    """
     for db in get_session():
         messages = list(db["messages"].find({
             "$or": [
@@ -301,12 +322,10 @@ def get_encrypted_history(user1: str, user2: str):
                 {"from_user": user2, "to_user": user1}
             ]
         }).sort("timestamp"))
-
         encrypted_messages = []
         for msg in messages:
-            msg["_id"] = str(msg["_id"])  # make ObjectId JSON serializable
+            msg["_id"] = str(msg["_id"])
             encrypted_text = bcrypt.hashpw(msg["text"].encode(), bcrypt.gensalt()).decode()
-
             encrypted_messages.append({
                 "_id": msg["_id"],
                 "from_user": msg["from_user"],
@@ -314,5 +333,4 @@ def get_encrypted_history(user1: str, user2: str):
                 "text": encrypted_text,
                 "timestamp": msg["timestamp"]
             })
-
         return encrypted_messages
