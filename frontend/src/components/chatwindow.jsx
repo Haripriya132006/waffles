@@ -51,18 +51,13 @@ function ContextMenu({ x, y, msg, isSelf, onReply, onEdit, onDelete, onClose }) 
     };
   }, [onClose]);
 
-  // Keep menu inside viewport
   const menuWidth = 160;
   const menuHeight = isSelf ? 130 : 52;
   const adjustedX = Math.min(x, window.innerWidth - menuWidth - 8);
   const adjustedY = Math.min(y, window.innerHeight - menuHeight - 8);
 
   return (
-    <div
-      ref={ref}
-      className="cw-context-menu"
-      style={{ top: adjustedY, left: adjustedX }}
-    >
+    <div ref={ref} className="cw-context-menu" style={{ top: adjustedY, left: adjustedX }}>
       {!msg.deleted && (
         <button className="cw-context-menu__item" onClick={() => { onReply(); onClose(); }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -116,13 +111,14 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState(null);
-  const [editingMsg, setEditingMsg] = useState(null); // { _id, text }
-  const [contextMenu, setContextMenu] = useState(null); // { x, y, msg }
-  const [confirmDelete, setConfirmDelete] = useState(null); // msg to delete
+  const [editingMsg, setEditingMsg] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const ws = useRef(null);
   const bottomRef = useRef();
   const inputRef = useRef();
   const lastTap = useRef({ id: null, time: 0 });
+  const tapTimer = useRef(null);
 
   useEffect(() => {
     axios.get(`${BASE_URL}/history/${currentUser}/${chatPartner}`)
@@ -141,7 +137,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     ws.current.onmessage = event => {
       const raw = JSON.parse(event.data);
 
-      // Handle edit broadcast
       if (raw.type === "edit") {
         setMessages(prev => prev.map(m =>
           m._id === raw._id ? { ...m, text: raw.text, edited: true } : m
@@ -149,7 +144,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         return;
       }
 
-      // Handle delete broadcast
       if (raw.type === "delete") {
         setMessages(prev => prev.map(m =>
           m._id === raw._id ? { ...m, deleted_for: [...(m.deleted_for || []), raw.deleted_for] } : m
@@ -169,7 +163,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
       };
       if ([message.from, message.to].includes(chatPartner)) {
         setMessages(prev => {
-          // avoid duplicate echo
           if (prev.find(m => m._id && m._id === message._id)) return prev;
           return [...prev, message];
         });
@@ -188,7 +181,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     if (replyTo || editingMsg) inputRef.current?.focus();
   }, [replyTo, editingMsg]);
 
-  // Close context menu on scroll
   useEffect(() => {
     const el = document.querySelector(".cw-messages");
     const close = () => setContextMenu(null);
@@ -200,7 +192,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     if (!text.trim()) return;
 
     if (editingMsg) {
-      // Send edit via WS
       ws.current.send(JSON.stringify({
         type: "edit",
         _id: editingMsg._id,
@@ -227,9 +218,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     inputRef.current?.focus();
   };
 
-  const handleDelete = (msg) => {
-    setConfirmDelete(msg);
-  };
+  const handleDelete = (msg) => setConfirmDelete(msg);
 
   const confirmDeleteMsg = () => {
     const msg = confirmDelete;
@@ -256,22 +245,27 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     setText("");
   };
 
-  // Show context menu on bubble click
+  // Single click/tap → context menu (after 350ms wait)
+  // Double click/tap → reply directly
+  // Uses onClick only — works on both desktop and mobile (no onTouchEnd conflict)
   const handleBubbleClick = useCallback((e, msg) => {
-    e.preventDefault();
+    if (msg.isDeletedForMe) return;
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, msg });
-  }, []);
 
-  // Mobile double-tap to open context menu
-  const handleTouchEnd = useCallback((e, msg) => {
     const now = Date.now();
+
     if (lastTap.current.id === msg._id && now - lastTap.current.time < 350) {
-      const touch = e.changedTouches[0];
-      setContextMenu({ x: touch.clientX, y: touch.clientY, msg });
+      // double → reply directly
+      clearTimeout(tapTimer.current);
+      setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text });
       lastTap.current = { id: null, time: 0 };
     } else {
+      // potential single — wait to confirm no second tap
       lastTap.current = { id: msg._id, time: now };
+      clearTimeout(tapTimer.current);
+      tapTimer.current = setTimeout(() => {
+        setContextMenu({ x: e.clientX, y: e.clientY, msg });
+      }, 350);
     }
   }, []);
 
@@ -315,7 +309,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
           <div
             key={msg._id || i}
             className={`cw-row ${msg.isSelf ? "cw-row--self" : "cw-row--other"}`}
-            onTouchEnd={(e) => handleTouchEnd(e, msg)}
           >
             {!msg.isSelf && (
               msg.isFirst
@@ -323,11 +316,14 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 : <div className="cw-row__avatar-gap" />
             )}
 
-            {/* Reply icon — desktop hover */}
+            {/* Reply icon — desktop hover only */}
             {!msg.isDeletedForMe && (
               <button
                 className="cw-reply-btn"
-                onClick={(e) => { e.stopPropagation(); setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text }); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text });
+                }}
                 aria-label="Reply"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -346,7 +342,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                   msg.isLast  ? "is-last"  : "",
                   msg.isDeletedForMe ? "cw-bubble--deleted" : "",
                 ].join(" ")}
-                onClick={(e) => !msg.isDeletedForMe && handleBubbleClick(e, msg)}
+                onClick={(e) => handleBubbleClick(e, msg)}
               >
                 {msg.isDeletedForMe ? (
                   <span>🚫 You deleted this message</span>
