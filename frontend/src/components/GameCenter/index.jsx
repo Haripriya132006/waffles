@@ -1,5 +1,5 @@
 // src/components/GameCenter/index.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import "./GameCenter.css";
 import TicTacToe       from "./games/TicTacToe";
 import RockPaperScissors from "./games/RockPaperScissors";
