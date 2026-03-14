@@ -115,7 +115,7 @@
 .cw-bubble--other.is-last  { border-bottom-left-radius: var(--radius-lg); }
 .cw-bubble--self.is-last   { border-bottom-right-radius: var(--radius-lg); }
 .cw-bubble--deleted { opacity: 0.5; font-style: italic; cursor: default; }
-.cw-bubble--voice  { padding: 8px 10px; }
+.cw-bubble--voice  { padding: 0 !important; background: transparent !important; border: none !important; }
 .cw-edited-label { font-size: 10px; color: var(--text-muted); margin-top: 1px; padding: 0 4px; }
 .cw-time { font-size: 11px; color: var(--text-muted); padding: 0 4px; margin-top: 1px; }
 
