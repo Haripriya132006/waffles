@@ -10,3 +10,4 @@ python-dotenv
 dotenv
 uvicorn[standard]
 supabase
+python-multipart
