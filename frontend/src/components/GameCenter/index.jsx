@@ -1,5 +1,5 @@
 // src/components/GameCenter/index.jsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import "./GameCenter.css";
 import TicTacToe       from "./games/TicTacToe";
 import RockPaperScissors from "./games/RockPaperScissors";
@@ -144,7 +144,7 @@ export function GameModal({ session, currentUser, onMove, onClose }) {
 //   gcRef.current.handleIncoming(raw)  ← call from ws.onmessage
 //   gcRef.current.openPicker()         ← call from activity button
 
-const GameCenter = React.forwardRef(function GameCenter(
+const GameCenter = forwardRef(function GameCenter(
   { currentUser, chatPartner, ws, onGameMessage },
   ref
 ) {
@@ -152,7 +152,7 @@ const GameCenter = React.forwardRef(function GameCenter(
   const [activeSession, setActiveSession] = useState(null); // { gameId, msgId, inviter, joiner, gameState }
 
   // Expose methods to parent via ref
-  React.useImperativeHandle(ref, () => ({
+  useImperativeHandle(ref, () => ({
     openPicker:      () => setPickerOpen(true),
     handleIncoming:  (raw) => handleIncoming(raw),
   }));
