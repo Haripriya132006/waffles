@@ -1,12 +1,14 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from db import get_session
 from models import User, Message, ChatRequest
-from typing import Dict
+from typing import Dict, Optional
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 import bcrypt
 from bson import ObjectId
+import os
+from supabase import create_client, Client
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -22,6 +24,15 @@ app.add_middleware(
 
 active_connections: Dict[str, WebSocket] = {}
 
+# ── Supabase client ──
+supabase: Client = create_client(
+    os.environ["SUPABASE_URL"],
+    os.environ["SUPABASE_KEY"],
+)
+
+BUCKET_ATTACHMENTS = "chat-attachments"
+BUCKET_VOICE       = "chat-voice"
+
 
 def hash(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -31,6 +42,41 @@ def verify_value(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
+# ────────────────────────────────────────────
+# Upload endpoint
+# ────────────────────────────────────────────
+@app.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    kind: str = Form(...),        # "image" | "document" | "voice"
+    from_user: str = Form(...),
+):
+    contents = await file.read()
+    size = len(contents)
+    bucket = BUCKET_VOICE if kind == "voice" else BUCKET_ATTACHMENTS
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
+    ts  = datetime.now(IST).strftime("%Y%m%d%H%M%S%f")
+    path = f"{from_user}/{ts}.{ext}"
+
+    supabase.storage.from_(bucket).upload(
+        path,
+        contents,
+        {"content-type": file.content_type, "x-upsert": "true"},
+    )
+    public_url = supabase.storage.from_(bucket).get_public_url(path)
+
+    return {
+        "url": public_url,
+        "name": file.filename,
+        "mime_type": file.content_type,
+        "size": size,
+        "kind": kind,
+    }
+
+
+# ────────────────────────────────────────────
+# WebSocket
+# ────────────────────────────────────────────
 @app.websocket("/wss/{username}")
 async def chat_ws(websocket: WebSocket, username: str):
     await websocket.accept()
@@ -48,32 +94,30 @@ async def chat_ws(websocket: WebSocket, username: str):
     try:
         while True:
             data = await websocket.receive_json()
-            print(f"📩 Received from {username}: {data}")
-
             msg_type = data.get("type")
 
-            # ── Edit message ──
+            # ── Edit ──
             if msg_type == "edit":
-                msg_id = data.get("_id")
+                msg_id  = data.get("_id")
                 new_text = data.get("text")
-                to_user = data.get("to")
+                to_user  = data.get("to")
                 if not msg_id or not new_text:
                     continue
                 for db in get_session():
                     db["messages"].update_one(
                         {"_id": ObjectId(msg_id), "from_user": username},
-                        {"$set": {"text": new_text, "edited": True, "edited_at": datetime.now(IST).isoformat()}}
+                        {"$set": {"text": new_text, "edited": True,
+                                  "edited_at": datetime.now(IST).isoformat()}}
                     )
-                broadcast = {"type": "edit", "_id": msg_id, "text": new_text}
-                # Notify recipient
                 if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(broadcast)
+                    await active_connections[to_user].send_json(
+                        {"type": "edit", "_id": msg_id, "text": new_text}
+                    )
                 continue
 
             # ── Soft delete ──
             if msg_type == "delete":
-                msg_id = data.get("_id")
-                to_user = data.get("to")
+                msg_id  = data.get("_id")
                 if not msg_id:
                     continue
                 for db in get_session():
@@ -81,41 +125,40 @@ async def chat_ws(websocket: WebSocket, username: str):
                         {"_id": ObjectId(msg_id)},
                         {"$addToSet": {"deleted_for": username}}
                     )
-                # No need to broadcast delete to recipient — it's only hidden for sender
                 continue
 
-            # ── Regular message ──
-            to_user = data.get("to")
-            text = data.get("text")
-            reply_to = data.get("reply_to")
+            # ── Regular / attachment / voice message ──
+            to_user    = data.get("to")
+            text       = data.get("text", "")
+            reply_to   = data.get("reply_to")
+            attachment = data.get("attachment")   # { url, name, mime_type, size, kind }
 
-            if not to_user or not text:
+            if not to_user or (not text.strip() and not attachment):
                 print("⚠️ Invalid WS payload, skipping")
                 continue
 
             message = {
-                "from_user": username,
-                "to_user": to_user,
-                "text": text,
-                "timestamp": datetime.now(IST).isoformat(),
-                "delivered": False,
-                "reply_to": reply_to or None,
-                "edited": False,
+                "from_user":  username,
+                "to_user":    to_user,
+                "text":       text,
+                "timestamp":  datetime.now(IST).isoformat(),
+                "delivered":  False,
+                "reply_to":   reply_to or None,
+                "attachment": attachment or None,
+                "edited":     False,
                 "deleted_for": [],
             }
 
             for db in get_session():
                 res = db["messages"].insert_one(message)
                 message["_id"] = str(res.inserted_id)
-                print(f"✅ Inserted into DB with _id: {res.inserted_id}")
 
             if to_user in active_connections:
                 await active_connections[to_user].send_json(message)
                 message["delivered"] = True
                 for db in get_session():
                     db["messages"].update_one(
-                        {"_id": res.inserted_id},
-                        {"$set": {"delivered": True}}
+                        {"_id": res.inserted_id}, {"$set": {"delivered": True}}
                     )
 
             if username in active_connections:
@@ -123,10 +166,12 @@ async def chat_ws(websocket: WebSocket, username: str):
 
     except WebSocketDisconnect:
         print(f"⚠️ WS disconnected: {username}")
-        if username in active_connections:
-            del active_connections[username]
+        active_connections.pop(username, None)
 
 
+# ────────────────────────────────────────────
+# REST endpoints (unchanged)
+# ────────────────────────────────────────────
 @app.get("/")
 def root():
     return {"status": "ChatApp API is running"}
@@ -153,17 +198,19 @@ class ChatRequestBody(BaseModel):
 
 @app.post("/request-chat")
 def request_chat(data: ChatRequestBody):
-    request = data.model_dump()
-    request["status"] = "pending"
+    req = data.model_dump()
+    req["status"] = "pending"
     for db in get_session():
-        db["chatrequests"].insert_one(request)
+        db["chatrequests"].insert_one(req)
     return {"msg": "Request sent"}
 
 
 @app.get("/pending-requests/{username}")
 def get_requests(username: str):
     for db in get_session():
-        return list(db["chatrequests"].find({"to_user": username, "status": "pending"}, {"_id": 0}))
+        return list(db["chatrequests"].find(
+            {"to_user": username, "status": "pending"}, {"_id": 0}
+        ))
 
 
 class AcceptRequestBody(BaseModel):
@@ -234,16 +281,14 @@ class SignupRequest(BaseModel):
 @app.post("/signup")
 def signup(data: SignupRequest):
     for db in get_session():
-        existing = db["users"].find_one({"username": data.username})
-        if existing:
+        if db["users"].find_one({"username": data.username}):
             raise HTTPException(status_code=400, detail="Username already exists")
-        user = {
+        db["users"].insert_one({
             "username": data.username,
             "password": hash(data.password),
             "security_question": data.question,
             "security_answer": hash(data.answer)
-        }
-        db["users"].insert_one(user)
+        })
         return {"msg": "User created successfully"}
 
 
@@ -301,15 +346,12 @@ def reject_chat(data: RejectRequestBody):
 def get_allowed_users(username: str):
     for db in get_session():
         requests = db["chatrequests"].find({
-            "$or": [
-                {"from_user": username},
-                {"to_user": username}
-            ]
+            "$or": [{"from_user": username}, {"to_user": username}]
         })
         results = []
         for r in requests:
-            other_user = r["to_user"] if r["from_user"] == username else r["from_user"]
-            results.append({"user": other_user, "status": r["status"]})
+            other = r["to_user"] if r["from_user"] == username else r["from_user"]
+            results.append({"user": other, "status": r["status"]})
         return results
 
 
@@ -322,15 +364,14 @@ def get_encrypted_history(user1: str, user2: str):
                 {"from_user": user2, "to_user": user1}
             ]
         }).sort("timestamp"))
-        encrypted_messages = []
+        result = []
         for msg in messages:
             msg["_id"] = str(msg["_id"])
-            encrypted_text = bcrypt.hashpw(msg["text"].encode(), bcrypt.gensalt()).decode()
-            encrypted_messages.append({
+            result.append({
                 "_id": msg["_id"],
                 "from_user": msg["from_user"],
                 "to_user": msg["to_user"],
-                "text": encrypted_text,
+                "text": bcrypt.hashpw(msg["text"].encode(), bcrypt.gensalt()).decode(),
                 "timestamp": msg["timestamp"]
             })
-        return encrypted_messages
+        return result

@@ -9,3 +9,4 @@ certifi
 python-dotenv
 dotenv
 uvicorn[standard]
+supabase
