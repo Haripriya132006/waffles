@@ -73,8 +73,14 @@ function VoicePlayer({ url, isSelf }) {
       />
       <button className="cw-voice__play" onClick={toggle}>
         {playing
-          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
-          : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="4" width="4" height="16" rx="2"/>
+              <rect x="15" y="4" width="4" height="16" rx="2"/>
+            </svg>
+          : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 4.5C7 3.4 8.2 2.7 9.2 3.3L19.7 9.8C20.6 10.4 20.6 11.6 19.7 12.2L9.2 18.7C8.2 19.3 7 18.6 7 17.5V4.5Z"
+                stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+            </svg>
         }
       </button>
       <div className="cw-voice__bars">
@@ -211,7 +217,7 @@ function ConfirmDialog({ onConfirm, onCancel }) {
     <div className="cw-confirm-overlay" onClick={onCancel}>
       <div className="cw-confirm-box" onClick={e => e.stopPropagation()}>
         <h3>Delete message?</h3>
-        <p>This will remove the message from your view. The other person may still see it.</p>
+        <p>Are you sure? This will delete the message for everyone in this chat.</p>
         <div className="cw-confirm-actions">
           <button className="cw-confirm-cancel" onClick={onCancel}>Cancel</button>
           <button className="cw-confirm-delete" onClick={onConfirm}>Delete</button>
@@ -264,7 +270,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
       }
       if (raw.type === "delete") {
         setMessages(prev => prev.map(m =>
-          m._id === raw._id ? { ...m, deleted_for: [...(m.deleted_for || []), raw.deleted_for] } : m
+          m._id === raw._id ? { ...m, deleted_for: ["everyone"] } : m
         ));
         return;
       }
@@ -398,7 +404,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     isSelf:         msg.from === currentUser,
     isFirst:        i === 0 || messages[i - 1].from !== msg.from,
     isLast:         i === messages.length - 1 || messages[i + 1].from !== msg.from,
-    isDeletedForMe: (msg.deleted_for || []).includes(currentUser),
+    isDeletedForMe: (msg.deleted_for || []).includes("everyone") || (msg.deleted_for || []).includes(currentUser),
   }));
 
   const canSend = (text.trim() || pendingFile) && !uploading;

@@ -118,13 +118,18 @@ async def chat_ws(websocket: WebSocket, username: str):
             # ── Soft delete ──
             if msg_type == "delete":
                 msg_id  = data.get("_id")
+                to_user = data.get("to")
                 if not msg_id:
                     continue
                 for db in get_session():
                     db["messages"].update_one(
                         {"_id": ObjectId(msg_id)},
-                        {"$addToSet": {"deleted_for": username}}
+                        {"$set": {"deleted_for": ["everyone"]}}  # marks deleted for all
                     )
+                # Broadcast to recipient
+                broadcast = {"type": "delete", "_id": msg_id, "deleted_for": "everyone"}
+                if to_user and to_user in active_connections:
+                    await active_connections[to_user].send_json(broadcast)
                 continue
 
             # ── Regular / attachment / voice message ──
