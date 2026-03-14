@@ -48,7 +48,7 @@ function truncate(text, max = 60) {
 }
 
 // ── Voice player ──
-function VoicePlayer({ url }) {
+function VoicePlayer({ url, isSelf }) {
   const audioRef = useRef(null);
   const [playing, setPlaying]   = useState(false);
   const [progress, setProgress] = useState(0);
@@ -61,25 +61,35 @@ function VoicePlayer({ url }) {
     else         { audioRef.current.play();  setPlaying(true);  }
   };
 
+  // Static waveform bars (heights give natural look)
+  const bars = [3,5,8,4,9,6,11,8,5,10,7,4,9,6,3,8,5,10,7,4];
+
   return (
-    <div className="cw-voice" onClick={e => e.stopPropagation()}>
+    <div className={`cw-voice ${isSelf ? "cw-voice--self" : "cw-voice--other"}`}>
       <audio ref={audioRef} src={url}
         onLoadedMetadata={e => setDuration(e.target.duration)}
         onTimeUpdate={e => setProgress(e.target.currentTime / (e.target.duration || 1))}
-        onEnded={() => { setPlaying(false); setProgress(0); if (audioRef.current) audioRef.current.currentTime = 0; }}
+        onEnded={() => { setPlaying(false); setProgress(0); if(audioRef.current) audioRef.current.currentTime = 0; }}
       />
       <button className="cw-voice__play" onClick={toggle}>
         {playing
-          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-          : <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+          : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         }
       </button>
-      <div className="cw-voice__track">
-        <div className="cw-voice__bar">
-          <div className="cw-voice__fill" style={{ width: `${progress * 100}%` }} />
-        </div>
-        <span className="cw-voice__time">{formatDuration(duration)}</span>
+      <div className="cw-voice__bars">
+        {bars.map((h, i) => (
+          <div
+            key={i}
+            className="cw-voice__bar-seg"
+            style={{
+              height: `${h}px`,
+              opacity: i / bars.length < progress ? 1 : 0.35,
+            }}
+          />
+        ))}
       </div>
+      <span className="cw-voice__time">{formatDuration(Math.round(duration))}</span>
     </div>
   );
 }

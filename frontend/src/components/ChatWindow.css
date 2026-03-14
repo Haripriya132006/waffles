@@ -124,47 +124,66 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 200px;
-  max-width: 260px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  min-width: 220px;
+  max-width: 280px;
 }
+.cw-voice--self  { background: var(--bubble-self);  color: var(--bubble-self-text); }
+.cw-voice--other { background: var(--bubble-other); color: var(--bubble-other-text); }
+
 .cw-voice__play {
-  width: 34px; height: 34px;
+  width: 38px; height: 38px;
   border-radius: 50%;
   border: none;
-  background: rgba(255,255,255,0.2);
-  color: inherit;
+  background: #fff;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: transform 0.1s;
 }
-.cw-bubble--other .cw-voice__play { background: var(--accent-dim); color: var(--accent); }
-.cw-voice__play:hover { opacity: 0.8; }
-.cw-voice__track { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.cw-voice__bar {
-  height: 3px; border-radius: 2px;
-  background: rgba(255,255,255,0.25);
-  overflow: hidden;
-}
-.cw-bubble--other .cw-voice__bar { background: var(--border); }
-.cw-voice__fill {
-  height: 100%; border-radius: 2px;
-  background: rgba(255,255,255,0.85);
-  transition: width 0.1s linear;
-}
-.cw-bubble--other .cw-voice__fill { background: var(--accent); }
-.cw-voice__time { font-size: 11px; color: rgba(255,255,255,0.7); }
-.cw-bubble--other .cw-voice__time { color: var(--text-muted); }
+.cw-voice--self  .cw-voice__play { color: var(--bubble-self); }
+.cw-voice--other .cw-voice__play { color: var(--accent); }
+.cw-voice__play:hover { transform: scale(1.08); }
+.cw-voice__play:active { transform: scale(0.94); }
 
-/* ── Image bubble ── */
+.cw-voice__bars {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+}
+.cw-voice__bar-seg {
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: opacity 0.1s;
+}
+
+.cw-voice__time {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Image bubble — fix margins ── */
 .cw-img-bubble {
   max-width: 260px;
-  max-height: 200px;
-  border-radius: var(--radius-sm);
+  max-height: 220px;
+  border-radius: var(--radius-md);
   object-fit: cover;
   cursor: zoom-in;
   display: block;
+  margin: -8px -13px;  /* cancel bubble padding so image goes edge to edge */
+  width: calc(100% + 26px);
 }
+
+/* When bubble has only an image, round corners properly */
+.cw-bubble.is-first .cw-img-bubble { border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg); }
+.cw-bubble.is-last  .cw-img-bubble { border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg); }
 
 /* ── Lightbox ── */
 .cw-lightbox {
