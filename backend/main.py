@@ -96,6 +96,38 @@ async def chat_ws(websocket: WebSocket, username: str):
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
+            # ── Game messages ──
+            GAME_TYPES = {"game_invite", "game_join", "game_move", "game_end"}
+            if msg_type in GAME_TYPES:
+                to_user = data.get("to")
+                # Forward to recipient
+                if to_user and to_user in active_connections:
+                    await active_connections[to_user].send_json(data)
+                # Echo back to sender
+                if username in active_connections:
+                    await active_connections[username].send_json(data)
+                # Persist invite/end as a message bubble
+                if msg_type in {"game_invite", "game_end"}:
+                    for db in get_session():
+                        db["messages"].update_one(
+                            {"_id": data.get("msgId")},
+                            {"$set": {
+                                "from_user":   data.get("inviter", username),
+                                "to_user":     to_user,
+                                "text":        "",
+                                "timestamp":   datetime.now(IST).isoformat(),
+                                "game_invite": {
+                                    "gameId":    data.get("gameId"),
+                                    "inviter":   data.get("inviter"),
+                                    "joiner":    data.get("joiner"),
+                                    "gameState": data.get("gameState"),
+                                },
+                                "deleted_for": [],
+                            }},
+                            upsert=True,
+                        )
+                continue
+
             # ── Edit ──
             if msg_type == "edit":
                 msg_id  = data.get("_id")
@@ -118,18 +150,13 @@ async def chat_ws(websocket: WebSocket, username: str):
             # ── Soft delete ──
             if msg_type == "delete":
                 msg_id  = data.get("_id")
-                to_user = data.get("to")
                 if not msg_id:
                     continue
                 for db in get_session():
                     db["messages"].update_one(
                         {"_id": ObjectId(msg_id)},
-                        {"$set": {"deleted_for": ["everyone"]}}  # marks deleted for all
+                        {"$addToSet": {"deleted_for": username}}
                     )
-                # Broadcast to recipient
-                broadcast = {"type": "delete", "_id": msg_id, "deleted_for": "everyone"}
-                if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(broadcast)
                 continue
 
             # ── Regular / attachment / voice message ──
