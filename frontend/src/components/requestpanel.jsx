@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import "./RequestPanel.css";
 
@@ -22,24 +22,99 @@ function Avatar({ name, size = 38 }) {
 }
 
 function RequestPanel({ currentUser, setChatPartner, setUserName }) {
-  const [allowedUsers, setAllowedUsers] = useState([]);
-  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [allowedUsers, setAllowedUsers]       = useState([]);
+  const [blockedUsers, setBlockedUsers]       = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
-  const [newUser, setNewUser] = useState("");
-  const [activeTab, setActiveTab] = useState("chats");
-  const [feedback, setFeedback] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [newUser, setNewUser]                 = useState("");
+  const [activeTab, setActiveTab]             = useState("chats");
+  const [feedback, setFeedback]               = useState("");
+  const [sidebarOpen, setSidebarOpen]         = useState(false);
+  const [unreadCounts, setUnreadCounts]       = useState({}); // { username: count }
+
+  const ws             = useRef(null);
+  const activeChatRef  = useRef(null); // which chat is currently open
 
   useEffect(() => {
     fetchAllowedUsers();
     fetchPendingRequests();
+    requestNotifPermission();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Background WebSocket: tracks incoming msgs for unread + notifs ──
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const connect = () => {
+      ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
+
+      ws.current.onmessage = (event) => {
+        const raw = JSON.parse(event.data);
+
+        // Ignore edit/delete/presence events
+        if (raw.type || !raw.from_user) return;
+
+        const sender = raw.from_user;
+
+        // Don't count if this chat is currently open
+        if (activeChatRef.current === sender) return;
+
+        // Bump unread count
+        setUnreadCounts(prev => ({
+          ...prev,
+          [sender]: (prev[sender] || 0) + 1,
+        }));
+
+        // Fire OS notification if tab not focused
+        fireNotification(sender, raw.text, raw.attachment);
+      };
+
+      ws.current.onclose = () => setTimeout(connect, 3000);
+      ws.current.onerror = () => ws.current?.close();
+    };
+
+    connect();
+    return () => ws.current?.close();
+  }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update browser tab title with total unread
+  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Waffles` : "Waffles";
+  }, [totalUnread]);
+
+  const requestNotifPermission = () => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  };
+
+  const fireNotification = (sender, text, attachment) => {
+    if (document.visibilityState === "visible") return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+    let body = text || "";
+    if (attachment?.kind === "voice")    body = "🎤 Voice message";
+    if (attachment?.kind === "image")    body = "📷 Image";
+    if (attachment?.kind === "document") body = `📄 ${attachment.name}`;
+
+    new Notification(sender, {
+      body: body || "Sent you a message",
+      icon: "/favicon.ico",
+      tag: sender, // collapses multiple notifs from same sender
+    });
+  };
+
+  const openChat = (user) => {
+    activeChatRef.current = user;
+    setUnreadCounts(prev => ({ ...prev, [user]: 0 }));
+    setChatPartner(user);
+  };
 
   const fetchAllowedUsers = async () => {
     const res = await axios.get(`${BASE_URL}/allowed-users/${currentUser}`);
     const data = res.data;
-    setAllowedUsers(data.filter((r) => r.status === "accepted").map((r) => r.user));
-    setBlockedUsers(data.filter((r) => r.status === "blocked").map((r) => r.user));
+    setAllowedUsers(data.filter(r => r.status === "accepted").map(r => r.user));
+    setBlockedUsers(data.filter(r => r.status === "blocked").map(r => r.user));
   };
 
   const fetchPendingRequests = async () => {
@@ -80,7 +155,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
 
   const switchTab = (key) => {
     setActiveTab(key);
-    setSidebarOpen(false); // close sidebar after selecting on mobile
+    setSidebarOpen(false);
   };
 
   const tabs = [
@@ -92,15 +167,12 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
   return (
     <div className="rp-shell">
 
-      {/* Mobile overlay — tap to close sidebar */}
       {sidebarOpen && (
         <div className="rp-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`rp-sidebar ${sidebarOpen ? "rp-sidebar--open" : ""}`}>
         <div className="rp-sidebar__top">
-          {/* Logo — clicking closes sidebar on mobile */}
           <div className="rp-brand" onClick={() => setSidebarOpen(false)}>
             <div className="rp-brand__icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -113,8 +185,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
 
           <nav className="rp-nav">
             {tabs.map(({ key, label, count }) => (
-              <button
-                key={key}
+              <button key={key}
                 className={`rp-nav__item ${activeTab === key ? "active" : ""}`}
                 onClick={() => switchTab(key)}
               >
@@ -130,9 +201,7 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
             <Avatar name={currentUser} size={30} />
             <span className="rp-user__name">{currentUser}</span>
           </div>
-          <button
-            className="rp-logout"
-            title="Sign out"
+          <button className="rp-logout" title="Sign out"
             onClick={() => { localStorage.removeItem("username"); setUserName(""); }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
@@ -144,10 +213,8 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="rp-main">
 
-        {/* Mobile top bar — visible only on small screens */}
         <div className="rp-topbar">
           <button className="rp-topbar__menu" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <div className="rp-brand__icon">
@@ -159,11 +226,9 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
             <span className="rp-brand__name">Waffles</span>
           </button>
 
-          {/* Mobile tab pills */}
           <div className="rp-topbar__tabs">
             {tabs.map(({ key, label, count }) => (
-              <button
-                key={key}
+              <button key={key}
                 className={`rp-pill ${activeTab === key ? "active" : ""}`}
                 onClick={() => setActiveTab(key)}
               >
@@ -189,16 +254,25 @@ function RequestPanel({ currentUser, setChatPartner, setUserName }) {
                 {allowedUsers.map((u) => (
                   <li key={u}>
                     <div className="rp-item">
-                      <Avatar name={u} />
+                      <div className="rp-item__avatar-wrap">
+                        <Avatar name={u} />
+                        {unreadCounts[u] > 0 && (
+                          <span className="rp-unread-dot">
+                            {unreadCounts[u] > 99 ? "99+" : unreadCounts[u]}
+                          </span>
+                        )}
+                      </div>
                       <div className="rp-item__info">
-                        <span className="rp-item__name">{u}</span>
+                        <span className={`rp-item__name ${unreadCounts[u] > 0 ? "rp-item__name--unread" : ""}`}>
+                          {u}
+                        </span>
                         {blockedUsers.includes(u) && (
                           <span className="rp-item__blocked">Blocked</span>
                         )}
                       </div>
                       <div className="rp-item__actions">
                         {!blockedUsers.includes(u) && (
-                          <button className="rp-btn rp-btn--primary" onClick={() => setChatPartner(u)}>
+                          <button className="rp-btn rp-btn--primary" onClick={() => openChat(u)}>
                             Chat
                           </button>
                         )}
