@@ -84,16 +84,19 @@ function VoicePlayer({ url, isSelf }) {
         }
       </button>
       <div className="cw-voice__bars">
-        {bars.map((h, i) => (
-          <div
-            key={i}
-            className="cw-voice__bar-seg"
-            style={{
-              height: `${h}px`,
-              opacity: i / bars.length < progress ? 1 : 0.35,
-            }}
-          />
-        ))}
+        {bars.map((h, i) => {
+          const pos = i / bars.length;
+          const diff = pos - progress;
+          // soft fade: fully lit behind, gradient over a 0.15 window, dim ahead
+          const opacity = diff < 0 ? 1 : diff < 0.15 ? 1 - (diff / 0.15) * 0.65 : 0.35;
+          return (
+            <div
+              key={i}
+              className="cw-voice__bar-seg"
+              style={{ height: `${h}px`, opacity }}
+            />
+          );
+        })}
       </div>
       <span className="cw-voice__time">{formatDuration(Math.round(duration))}</span>
     </div>

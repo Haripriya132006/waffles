@@ -158,7 +158,7 @@
   width: 3px;
   border-radius: 2px;
   background: currentColor;
-  transition: opacity 0.1s;
+  transition: opacity 0.25s ease;
 }
 
 .cw-voice__time {
