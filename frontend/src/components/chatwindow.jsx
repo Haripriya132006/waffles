@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import "./ChatWindow.css";
 import SendIcon from '../assets/send-icon.svg';
+import GameCenter, { GameInviteBubble } from "./GameCenter";
 
 const BASE_URL = "https://chatapp-yc2g.onrender.com";
 
@@ -236,6 +237,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
   const [recSeconds, setRecSeconds]       = useState(0);
 
   const ws            = useRef(null);
+  const gcRef         = useRef(null);
   const bottomRef     = useRef();
   const inputRef      = useRef();
   const fileInputRef  = useRef();
@@ -259,7 +261,27 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
     ws.current.onmessage = event => {
       const raw = JSON.parse(event.data);
-      console.log("WS RAW:", raw);
+
+      // ── Game messages — route to GameCenter, don't touch message state ──
+      const GAME_TYPES = ["game_invite","game_join","game_move","game_end"];
+      if (GAME_TYPES.includes(raw.type)) {
+        gcRef.current?.handleIncoming(raw);
+        if (raw.type === "game_invite") {
+          setMessages(prev => {
+            if (prev.find(m => m._id === raw.msgId)) return prev;
+            return [...prev, {
+              _id: raw.msgId,
+              from: raw.inviter,
+              to: raw.to || chatPartner,
+              text: "",
+              timestamp: new Date().toISOString(),
+              game_invite: { gameId: raw.gameId, inviter: raw.inviter, joiner: raw.joiner, gameState: raw.gameState },
+              deleted_for: [],
+            }];
+          });
+        }
+        return;
+      }
 
       if (raw.type === "edit") {
         setMessages(prev => prev.map(m => m._id === raw._id ? { ...m, text: raw.text, edited: true } : m));
@@ -298,6 +320,27 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     el?.addEventListener("scroll", close);
     return () => el?.removeEventListener("scroll", close);
   }, []);
+
+  const handleGameMessage = useCallback((payload) => {
+    setMessages(prev => {
+      const existing = prev.findIndex(m => m._id === payload.msgId);
+      const bubble = {
+        _id: payload.msgId,
+        from: payload.inviter || currentUser,
+        to: chatPartner,
+        text: "",
+        timestamp: new Date().toISOString(),
+        game_invite: { gameId: payload.gameId, inviter: payload.inviter, joiner: payload.joiner, gameState: payload.gameState },
+        deleted_for: [],
+      };
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = { ...updated[existing], game_invite: bubble.game_invite };
+        return updated;
+      }
+      return [...prev, bubble];
+    });
+  }, [currentUser, chatPartner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const uploadFile = async (file, kind) => {
     const form = new FormData();
@@ -379,7 +422,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
   const cancelEdit = () => { setEditingMsg(null); setText(""); };
 
   const handleBubbleClick = useCallback((e, msg) => {
-    if (msg.isDeletedForMe) return;
+    if (msg.isDeletedForMe || msg.game_invite) return;
     e.stopPropagation();
     const now = Date.now();
     if (lastTap.current.id === msg._id && now - lastTap.current.time < 350) {
@@ -453,23 +496,45 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                   msg.isLast  ? "is-last"  : "",
                   msg.isDeletedForMe ? "cw-bubble--deleted" : "",
                   msg.attachment?.kind === "voice" ? "cw-bubble--voice" : "",
+                  msg.attachment?.kind === "image" ? "cw-bubble--image" : "",
+                  msg.game_invite ? "cw-bubble--game" : "",
                 ].join(" ")}
                 onClick={e => handleBubbleClick(e, msg)}
               >
                 {msg.isDeletedForMe ? <span>🚫 This message was deleted</span> : (
                   <>
-                    {msg.reply_to && (
+                    {msg.game_invite && (
+                      <GameInviteBubble
+                        msg={msg}
+                        currentUser={currentUser}
+                        onJoin={(m) => {
+                          const payload = {
+                            type: "game_join",
+                            msgId: m._id,
+                            gameId: m.game_invite.gameId,
+                            inviter: m.game_invite.inviter,
+                            joiner: currentUser,
+                            gameState: m.game_invite.gameState,
+                            from: currentUser,
+                            to: m.from === currentUser ? m.to : m.from,
+                          };
+                          ws.current?.send(JSON.stringify(payload));
+                          gcRef.current?.handleIncoming({ ...payload, type: "game_invite" });
+                        }}
+                      />
+                    )}
+                    {!msg.game_invite && msg.reply_to && (
                       <div className="cw-quote">
                         <span className="cw-quote__name">{msg.reply_to.from_user}</span>
                         <span className="cw-quote__text">{truncate(msg.reply_to.text)}</span>
                       </div>
                     )}
-                    {msg.attachment && (
+                    {!msg.game_invite && msg.attachment && (
                       msg.attachment.kind === "voice"    ? <VoicePlayer url={msg.attachment.url} /> :
                       msg.attachment.kind === "image"    ? <ImageBubble attachment={msg.attachment} /> :
                       msg.attachment.kind === "document" ? <DocBubble   attachment={msg.attachment} /> : null
                     )}
-                    {msg.text && <span>{msg.text}</span>}
+                    {!msg.game_invite && msg.text && <span>{msg.text}</span>}
                   </>
                 )}
               </div>
@@ -571,6 +636,23 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
+            <div style={{ position: "relative" }}>
+              <button className="cw-icon-btn" onClick={() => gcRef.current?.openPicker()} title="Activities">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="3" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="13" y="3" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="2" y="14" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
+                  <rect x="13" y="14" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              </button>
+              <GameCenter
+                ref={gcRef}
+                currentUser={currentUser}
+                chatPartner={chatPartner}
+                ws={ws}
+                onGameMessage={handleGameMessage}
+              />
+            </div>
             <textarea ref={inputRef} className="cw-textarea" rows={1}
               placeholder={editingMsg ? "Edit message…" : `Message ${chatPartner}…`}
               value={text}

@@ -116,6 +116,7 @@
 .cw-bubble--self.is-last   { border-bottom-right-radius: var(--radius-lg); }
 .cw-bubble--deleted { opacity: 0.5; font-style: italic; cursor: default; }
 .cw-bubble--voice   { padding: 0; background: transparent !important; border: none !important; box-shadow: none !important; }
+.cw-bubble--game    { padding: 10px 12px; cursor: default; }
 .cw-edited-label { font-size: 10px; color: var(--text-muted); margin-top: 1px; padding: 0 4px; }
 .cw-time { font-size: 11px; color: var(--text-muted); padding: 0 4px; margin-top: 1px; }
 
@@ -171,11 +172,16 @@
 /* ── Image bubble ── */
 .cw-img-bubble {
   max-width: 260px;
-  max-height: 200px;
-  border-radius: var(--radius-sm);
+  max-height: 220px;
+  border-radius: 10px;
   object-fit: cover;
   cursor: zoom-in;
   display: block;
+  width: 100%;
+}
+
+.cw-bubble--image {
+  padding: 3px;
 }
 
 /* ── Lightbox ── */
