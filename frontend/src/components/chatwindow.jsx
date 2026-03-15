@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import "./ChatWindow.css";
 import SendIcon from '../assets/send-icon.svg';
-import GameCenter, { GameInviteBubble } from "./GameCenter";
 
 const BASE_URL = "https://chatapp-yc2g.onrender.com";
 
@@ -73,7 +72,10 @@ function VoicePlayer({ url }) {
       />
       <button className="cw-voice__play" onClick={toggle}>
         {playing
-          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="2"/><rect x="15" y="4" width="4" height="16" rx="2"/></svg>
+          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="4" width="4" height="16" rx="2"/>
+              <rect x="15" y="4" width="4" height="16" rx="2"/>
+            </svg>
           : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M7 4.5C7 3.4 8.2 2.7 9.2 3.3L19.7 9.8C20.6 10.4 20.6 11.6 19.7 12.2L9.2 18.7C8.2 19.3 7 18.6 7 17.5V4.5Z"
                 stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
@@ -85,9 +87,7 @@ function VoicePlayer({ url }) {
           const pos  = i / bars.length;
           const diff = pos - progress;
           const opacity = diff < 0 ? 1 : diff < 0.15 ? 1 - (diff / 0.15) * 0.65 : 0.35;
-          return (
-            <div key={i} className="cw-voice__bar-seg" style={{ height: `${h}px`, opacity }} />
-          );
+          return <div key={i} className="cw-voice__bar-seg" style={{ height: `${h}px`, opacity }} />;
         })}
       </div>
       <span className="cw-voice__time">{formatDuration(Math.round(duration))}</span>
@@ -182,7 +182,7 @@ function ContextMenu({ x, y, msg, isSelf, onReply, onEdit, onDelete, onClose }) 
           Reply
         </button>
       )}
-      {isSelf && !msg.deleted && !msg.attachment && !msg.game_invite && (
+      {isSelf && !msg.deleted && !msg.attachment && (
         <button className="cw-context-menu__item" onClick={() => { onEdit(); onClose(); }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -236,7 +236,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
   const [recSeconds, setRecSeconds]       = useState(0);
 
   const ws            = useRef(null);
-  const gcRef         = useRef(null);   // GameCenter ref
   const bottomRef     = useRef();
   const inputRef      = useRef();
   const fileInputRef  = useRef();
@@ -261,46 +260,10 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     ws.current.onmessage = event => {
       const raw = JSON.parse(event.data);
 
-      // ── Game messages ──
-      const GAME_TYPES = ["game_invite","game_join","game_move","game_end"];
-      if (GAME_TYPES.includes(raw.type)) {
-        gcRef.current?.handleIncoming(raw);
-        // game_invite and game_end show as message bubbles
-        if (raw.type === "game_invite" || raw.type === "game_end") {
-          setMessages(prev => {
-            const existing = prev.findIndex(m => m._id === raw.msgId);
-            const bubble = {
-              _id:         raw.msgId,
-              from:        raw.from || raw.inviter,
-              to:          raw.to   || chatPartner,
-              text:        "",
-              timestamp:   raw.timestamp || new Date().toISOString(),
-              game_invite: {
-                gameId:    raw.gameId,
-                inviter:   raw.inviter,
-                joiner:    raw.joiner,
-                gameState: raw.gameState,
-              },
-              deleted_for: [],
-            };
-            if (existing >= 0) {
-              const updated = [...prev];
-              updated[existing] = { ...updated[existing], game_invite: bubble.game_invite };
-              return updated;
-            }
-            return [...prev, bubble];
-          });
-        }
-        return;
-      }
-
-      // ── Edit ──
       if (raw.type === "edit") {
         setMessages(prev => prev.map(m => m._id === raw._id ? { ...m, text: raw.text, edited: true } : m));
         return;
       }
-
-      // ── Delete ──
       if (raw.type === "delete") {
         setMessages(prev => prev.map(m =>
           m._id === raw._id ? { ...m, deleted_for: ["everyone"] } : m
@@ -308,7 +271,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
         return;
       }
 
-      // ── Regular message ──
       const message = {
         from: raw.from || raw.from_user, to: raw.to || raw.to_user,
         text: raw.text, timestamp: raw.timestamp, _id: raw._id,
@@ -335,33 +297,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     el?.addEventListener("scroll", close);
     return () => el?.removeEventListener("scroll", close);
   }, []);
-
-  // Called by GameCenter when a game invite/end message should appear in chat
-  const handleGameMessage = useCallback((payload) => {
-    const bubble = {
-      _id:         payload.msgId,
-      from:        payload.from || currentUser,
-      to:          payload.to   || chatPartner,
-      text:        "",
-      timestamp:   new Date().toISOString(),
-      game_invite: {
-        gameId:    payload.gameId,
-        inviter:   payload.inviter,
-        joiner:    payload.joiner,
-        gameState: payload.gameState,
-      },
-      deleted_for: [],
-    };
-    setMessages(prev => {
-      const existing = prev.findIndex(m => m._id === payload.msgId);
-      if (existing >= 0) {
-        const updated = [...prev];
-        updated[existing] = { ...updated[existing], game_invite: bubble.game_invite };
-        return updated;
-      }
-      return [...prev, bubble];
-    });
-  }, [currentUser, chatPartner]);
 
   const uploadFile = async (file, kind) => {
     const form = new FormData();
@@ -443,7 +378,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
   const cancelEdit = () => { setEditingMsg(null); setText(""); };
 
   const handleBubbleClick = useCallback((e, msg) => {
-    if (msg.isDeletedForMe || msg.game_invite) return; // don't open context on game bubbles
+    if (msg.isDeletedForMe) return;
     e.stopPropagation();
     const now = Date.now();
     if (lastTap.current.id === msg._id && now - lastTap.current.time < 350) {
@@ -497,7 +432,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 ? <div className="cw-row__avatar"><Avatar name={msg.from} size={26} /></div>
                 : <div className="cw-row__avatar-gap" />
             )}
-            {!msg.isDeletedForMe && !msg.game_invite && (
+            {!msg.isDeletedForMe && (
               <button className="cw-reply-btn"
                 onClick={e => { e.stopPropagation(); setReplyTo({ message_id: msg._id, from_user: msg.from, text: msg.text }); }}
                 aria-label="Reply"
@@ -517,29 +452,10 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                   msg.isLast  ? "is-last"  : "",
                   msg.isDeletedForMe ? "cw-bubble--deleted" : "",
                   msg.attachment?.kind === "voice" ? "cw-bubble--voice" : "",
-                  msg.game_invite ? "cw-bubble--game" : "",
                 ].join(" ")}
                 onClick={e => handleBubbleClick(e, msg)}
               >
-                {msg.isDeletedForMe ? (
-                  <span>🚫 This message was deleted</span>
-                ) : msg.game_invite ? (
-                  // ── Game invite bubble ──
-                  <GameInviteBubble
-                    msg={msg}
-                    currentUser={currentUser}
-                    onJoin={(m) => {
-                      gcRef.current?.handleIncoming({
-                        type:      "game_invite",
-                        msgId:     m._id,
-                        gameId:    m.game_invite.gameId,
-                        inviter:   m.game_invite.inviter,
-                        joiner:    m.game_invite.joiner,
-                        gameState: m.game_invite.gameState,
-                      });
-                    }}
-                  />
-                ) : (
+                {msg.isDeletedForMe ? <span>🚫 This message was deleted</span> : (
                   <>
                     {msg.reply_to && (
                       <div className="cw-quote">
@@ -648,35 +564,12 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
               style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) setPendingFile(e.target.files[0]); e.target.value = ""; }}
             />
-
-            {/* Paperclip */}
             <button className="cw-icon-btn" onClick={() => fileInputRef.current.click()} title="Attach file">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"
                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
-
-            {/* Activity / Game button */}
-            <div style={{ position: "relative" }}>
-              <button className="cw-icon-btn" onClick={() => gcRef.current?.openPicker()} title="Activities">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <rect x="2" y="3" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
-                  <rect x="13" y="3" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
-                  <rect x="2" y="14" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
-                  <rect x="13" y="14" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </button>
-              {/* GameCenter mounts here so picker popup positions relative to this button */}
-              <GameCenter
-                ref={gcRef}
-                currentUser={currentUser}
-                chatPartner={chatPartner}
-                ws={ws}
-                onGameMessage={handleGameMessage}
-              />
-            </div>
-
             <textarea ref={inputRef} className="cw-textarea" rows={1}
               placeholder={editingMsg ? "Edit message…" : `Message ${chatPartner}…`}
               value={text}
@@ -690,7 +583,6 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
                 if (e.key === "Escape" && editingMsg) cancelEdit();
               }}
             />
-
             {!text.trim() && !pendingFile && !editingMsg ? (
               <button className="cw-icon-btn cw-icon-btn--mic" onClick={startRecording} title="Voice message">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

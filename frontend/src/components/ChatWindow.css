@@ -115,8 +115,7 @@
 .cw-bubble--other.is-last  { border-bottom-left-radius: var(--radius-lg); }
 .cw-bubble--self.is-last   { border-bottom-right-radius: var(--radius-lg); }
 .cw-bubble--deleted { opacity: 0.5; font-style: italic; cursor: default; }
-.cw-bubble--voice  { padding: 8px 10px; }
-.cw-bubble--game   { padding: 10px 12px; cursor: default; }
+.cw-bubble--voice   { padding: 0; background: transparent !important; border: none !important; box-shadow: none !important; }
 .cw-edited-label { font-size: 10px; color: var(--text-muted); margin-top: 1px; padding: 0 4px; }
 .cw-time { font-size: 11px; color: var(--text-muted); padding: 0 4px; margin-top: 1px; }
 
@@ -125,37 +124,49 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 200px;
-  max-width: 260px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  min-width: 220px;
+  max-width: 280px;
 }
+.cw-bubble--self  .cw-voice { background: var(--bubble-self);  color: var(--bubble-self-text); }
+.cw-bubble--other .cw-voice { background: var(--bubble-other); color: var(--bubble-other-text); }
+
 .cw-voice__play {
-  width: 34px; height: 34px;
+  width: 38px; height: 38px;
   border-radius: 50%;
   border: none;
-  background: rgba(255,255,255,0.2);
-  color: inherit;
+  background: #fff;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: transform 0.1s;
 }
-.cw-bubble--other .cw-voice__play { background: var(--accent-dim); color: var(--accent); }
-.cw-voice__play:hover { opacity: 0.8; }
-.cw-voice__track { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.cw-voice__bar {
-  height: 3px; border-radius: 2px;
-  background: rgba(255,255,255,0.25);
-  overflow: hidden;
+.cw-bubble--self  .cw-voice__play { color: var(--bubble-self); }
+.cw-bubble--other .cw-voice__play { color: var(--accent); }
+.cw-voice__play:hover  { transform: scale(1.08); }
+.cw-voice__play:active { transform: scale(0.94); }
+
+.cw-voice__bars {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
 }
-.cw-bubble--other .cw-voice__bar { background: var(--border); }
-.cw-voice__fill {
-  height: 100%; border-radius: 2px;
-  background: rgba(255,255,255,0.85);
-  transition: width 0.1s linear;
+.cw-voice__bar-seg {
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: opacity 0.25s ease;
 }
-.cw-bubble--other .cw-voice__fill { background: var(--accent); }
-.cw-voice__time { font-size: 11px; color: rgba(255,255,255,0.7); }
-.cw-bubble--other .cw-voice__time { color: var(--text-muted); }
+.cw-voice__time {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* ── Image bubble ── */
 .cw-img-bubble {
