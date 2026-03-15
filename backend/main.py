@@ -22,7 +22,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-active_connections: Dict[str, WebSocket] = {}
+active_connections: Dict[str, list] = {}
+
+
+async def send_to_user(username: str, data: dict):
+    """Send to all active connections for a user."""
+    conns = active_connections.get(username, [])
+    dead = []
+    for ws in conns:
+        try:
+            await ws.send_json(data)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        conns.remove(ws)
 
 # ── Supabase client ──
 supabase: Client = create_client(
@@ -80,8 +93,10 @@ async def upload_file(
 @app.websocket("/wss/{username}")
 async def chat_ws(websocket: WebSocket, username: str):
     await websocket.accept()
-    active_connections[username] = websocket
-    print(f"✅ WS connected: {username}")
+    if username not in active_connections:
+        active_connections[username] = []
+    active_connections[username].append(websocket)
+    print(f"✅ WS connected: {username} ({len(active_connections[username])} connections)")
 
     # Deliver undelivered messages
     for db in get_session():
@@ -89,7 +104,7 @@ async def chat_ws(websocket: WebSocket, username: str):
         for msg in undelivered:
             oid = msg["_id"]
             msg["_id"] = str(oid)
-            await websocket.send_json(msg)
+            await send_to_user(username, msg)
             db["messages"].update_one({"_id": oid}, {"$set": {"delivered": True}})
 
     try:
@@ -111,12 +126,9 @@ async def chat_ws(websocket: WebSocket, username: str):
                                   "edited_at": datetime.now(IST).isoformat()}}
                     )
                 broadcast = {"type": "edit", "_id": msg_id, "text": new_text}
-                # Notify recipient
                 if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(broadcast)
-                # Echo back to sender so their UI updates too
-                if username in active_connections:
-                    await active_connections[username].send_json(broadcast)
+                    await send_to_user(to_user, broadcast)
+                await send_to_user(username, broadcast)
                 continue
 
             # ── Delete (for everyone) ──
@@ -131,12 +143,9 @@ async def chat_ws(websocket: WebSocket, username: str):
                         {"$set": {"deleted_for": ["everyone"]}}
                     )
                 broadcast = {"type": "delete", "_id": msg_id}
-                # Notify recipient so their bubble updates too
                 if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(broadcast)
-                # Echo to sender
-                if username in active_connections:
-                    await active_connections[username].send_json(broadcast)
+                    await send_to_user(to_user, broadcast)
+                await send_to_user(username, broadcast)
                 continue
 
             # ── Regular / attachment / voice message ──
@@ -167,7 +176,7 @@ async def chat_ws(websocket: WebSocket, username: str):
 
             # Deliver to recipient if online
             if to_user in active_connections:
-                await active_connections[to_user].send_json(message)
+                await send_to_user(to_user, message)
                 message["delivered"] = True
                 for db in get_session():
                     db["messages"].update_one(
@@ -175,12 +184,16 @@ async def chat_ws(websocket: WebSocket, username: str):
                     )
 
             # Echo back to sender
-            if username in active_connections:
-                await active_connections[username].send_json(message)
+            await send_to_user(username, message)
 
     except WebSocketDisconnect:
         print(f"⚠️ WS disconnected: {username}")
-        active_connections.pop(username, None)
+        if username in active_connections:
+            conns = active_connections[username]
+            if websocket in conns:
+                conns.remove(websocket)
+            if not conns:
+                del active_connections[username]
 
 
 # ────────────────────────────────────────────
