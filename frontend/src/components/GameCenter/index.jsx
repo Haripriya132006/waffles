@@ -195,6 +195,7 @@ const GameCenter = forwardRef(function GameCenter(
     setActiveSession({ msgId, gameId, inviter: currentUser, joiner: null, gameState: initialState });
   };
 
+  // eslint-disable-next-line no-unused-vars
   const joinGame = (msg) => {
     const { msgId, gameId, inviter, gameState } = msg.game_invite;
     const payload = {

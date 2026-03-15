@@ -2,7 +2,7 @@
 import React from "react";
 
 export default function TicTacToe({ gameState, myRole, onMove }) {
-  const { board, turn, winner, ended, result } = gameState;
+  const { board, turn, ended, result } = gameState;
   const myMark    = myRole === "inviter" ? "X" : "O";
   const isMyTurn  = turn === myRole && !ended;
 

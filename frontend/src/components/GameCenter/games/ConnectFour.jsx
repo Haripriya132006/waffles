@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 
 export default function ConnectFour({ gameState, myRole, onMove }) {
-  const { board, turn, winner, ended, result } = gameState;
+  const { board, turn, ended, result } = gameState;
   const myColor   = myRole === "inviter" ? "R" : "Y";
   const isMyTurn  = turn === myRole && !ended;
   const [hoverCol, setHoverCol] = useState(null);
