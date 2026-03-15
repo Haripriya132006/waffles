@@ -48,7 +48,7 @@ def verify_value(plain: str, hashed: str) -> bool:
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    kind: str = Form(...),        # "image" | "document" | "voice"
+    kind: str = Form(...),
     from_user: str = Form(...),
 ):
     contents = await file.read()
@@ -83,6 +83,7 @@ async def chat_ws(websocket: WebSocket, username: str):
     active_connections[username] = websocket
     print(f"✅ WS connected: {username}")
 
+    # Deliver undelivered messages
     for db in get_session():
         undelivered = list(db["messages"].find({"to_user": username, "delivered": False}))
         for msg in undelivered:
@@ -96,41 +97,9 @@ async def chat_ws(websocket: WebSocket, username: str):
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
-            # ── Game messages ──
-            GAME_TYPES = {"game_invite", "game_join", "game_move", "game_end"}
-            if msg_type in GAME_TYPES:
-                to_user = data.get("to")
-                # Forward to recipient
-                if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(data)
-                # Echo back to sender
-                if username in active_connections:
-                    await active_connections[username].send_json(data)
-                # Persist invite/end as a message bubble
-                if msg_type in {"game_invite", "game_end"}:
-                    for db in get_session():
-                        db["messages"].update_one(
-                            {"_id": data.get("msgId")},
-                            {"$set": {
-                                "from_user":   data.get("inviter", username),
-                                "to_user":     to_user,
-                                "text":        "",
-                                "timestamp":   datetime.now(IST).isoformat(),
-                                "game_invite": {
-                                    "gameId":    data.get("gameId"),
-                                    "inviter":   data.get("inviter"),
-                                    "joiner":    data.get("joiner"),
-                                    "gameState": data.get("gameState"),
-                                },
-                                "deleted_for": [],
-                            }},
-                            upsert=True,
-                        )
-                continue
-
             # ── Edit ──
             if msg_type == "edit":
-                msg_id  = data.get("_id")
+                msg_id   = data.get("_id")
                 new_text = data.get("text")
                 to_user  = data.get("to")
                 if not msg_id or not new_text:
@@ -141,29 +110,40 @@ async def chat_ws(websocket: WebSocket, username: str):
                         {"$set": {"text": new_text, "edited": True,
                                   "edited_at": datetime.now(IST).isoformat()}}
                     )
+                broadcast = {"type": "edit", "_id": msg_id, "text": new_text}
+                # Notify recipient
                 if to_user and to_user in active_connections:
-                    await active_connections[to_user].send_json(
-                        {"type": "edit", "_id": msg_id, "text": new_text}
-                    )
+                    await active_connections[to_user].send_json(broadcast)
+                # Echo back to sender so their UI updates too
+                if username in active_connections:
+                    await active_connections[username].send_json(broadcast)
                 continue
 
-            # ── Soft delete ──
+            # ── Delete (for everyone) ──
             if msg_type == "delete":
                 msg_id  = data.get("_id")
+                to_user = data.get("to")
                 if not msg_id:
                     continue
                 for db in get_session():
                     db["messages"].update_one(
                         {"_id": ObjectId(msg_id)},
-                        {"$addToSet": {"deleted_for": username}}
+                        {"$set": {"deleted_for": ["everyone"]}}
                     )
+                broadcast = {"type": "delete", "_id": msg_id}
+                # Notify recipient so their bubble updates too
+                if to_user and to_user in active_connections:
+                    await active_connections[to_user].send_json(broadcast)
+                # Echo to sender
+                if username in active_connections:
+                    await active_connections[username].send_json(broadcast)
                 continue
 
             # ── Regular / attachment / voice message ──
             to_user    = data.get("to")
             text       = data.get("text", "")
             reply_to   = data.get("reply_to")
-            attachment = data.get("attachment")   # { url, name, mime_type, size, kind }
+            attachment = data.get("attachment")
 
             if not to_user or (not text.strip() and not attachment):
                 print("⚠️ Invalid WS payload, skipping")
@@ -185,6 +165,7 @@ async def chat_ws(websocket: WebSocket, username: str):
                 res = db["messages"].insert_one(message)
                 message["_id"] = str(res.inserted_id)
 
+            # Deliver to recipient if online
             if to_user in active_connections:
                 await active_connections[to_user].send_json(message)
                 message["delivered"] = True
@@ -193,6 +174,7 @@ async def chat_ws(websocket: WebSocket, username: str):
                         {"_id": res.inserted_id}, {"$set": {"delivered": True}}
                     )
 
+            # Echo back to sender
             if username in active_connections:
                 await active_connections[username].send_json(message)
 
@@ -202,7 +184,7 @@ async def chat_ws(websocket: WebSocket, username: str):
 
 
 # ────────────────────────────────────────────
-# REST endpoints (unchanged)
+# REST endpoints
 # ────────────────────────────────────────────
 @app.get("/")
 def root():
