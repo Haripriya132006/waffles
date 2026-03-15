@@ -259,6 +259,7 @@ function ChatWindow({ currentUser, chatPartner, goBack }) {
     ws.current = new WebSocket(`wss://chatapp-yc2g.onrender.com/wss/${currentUser}`);
     ws.current.onmessage = event => {
       const raw = JSON.parse(event.data);
+      console.log("WS RAW:", raw);
 
       if (raw.type === "edit") {
         setMessages(prev => prev.map(m => m._id === raw._id ? { ...m, text: raw.text, edited: true } : m));
