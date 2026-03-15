@@ -112,6 +112,43 @@ async def chat_ws(websocket: WebSocket, username: str):
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
+            # ── Game messages ──
+            GAME_TYPES = {"game_invite", "game_join", "game_move", "game_end"}
+            if msg_type in GAME_TYPES:
+                to_user = data.get("to")
+                # Forward to recipient in real time
+                if to_user and to_user in active_connections:
+                    await send_to_user(to_user, data)
+                # Echo back to sender
+                await send_to_user(username, data)
+                # Persist invite as a message so it shows in history
+                if msg_type == "game_invite":
+                    for db in get_session():
+                        db["messages"].insert_one({
+                            "_id": data.get("msgId"),
+                            "from_user": username,
+                            "to_user": to_user,
+                            "text": "",
+                            "timestamp": datetime.now(IST).isoformat(),
+                            "delivered": True,
+                            "game_invite": {
+                                "gameId":    data.get("gameId"),
+                                "inviter":   data.get("inviter"),
+                                "joiner":    data.get("joiner"),
+                                "gameState": data.get("gameState"),
+                            },
+                            "deleted_for": [],
+                        })
+                # Update game state for moves and joins
+                if msg_type in {"game_move", "game_join"}:
+                    for db in get_session():
+                        db["messages"].update_one(
+                            {"_id": data.get("msgId")},
+                            {"$set": {"game_invite.gameState": data.get("gameState"),
+                                    "game_invite.joiner": data.get("joiner")}}
+                        )
+                continue
+
             # ── Edit ──
             if msg_type == "edit":
                 msg_id   = data.get("_id")
